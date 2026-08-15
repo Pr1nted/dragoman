@@ -1,4 +1,4 @@
-# `pip install dragoman` builds the C++ library through CMake and puts the
+# `pip install open-dragoman` builds the C++ library through CMake and puts the
 # resulting shared object inside the package, beside __init__.py. So the wheel
 # is a complete install: no compiler at install time, nothing to locate
 # afterwards, and no separate step for a Greater Diplomacy 5 player who
@@ -7,13 +7,18 @@
 # This lives at the repository root rather than beside the package so that
 # `pip install .` and `pip install git+https://…/dragoman` both work from a
 # plain checkout, which is the whole point of it being accessible.
+#
+# The distribution is `open-dragoman` because `dragoman` is already registered
+# on PyPI by somebody else. The module it installs is still `dragoman`, which
+# is ordinary -- pillow installs PIL, pyyaml installs yaml -- and keeps the
+# import, the command and the repository all saying the same word.
 
 [build-system]
 requires = ["scikit-build-core>=0.8"]
 build-backend = "scikit_build_core.build"
 
 [project]
-name = "dragoman"
+name = "open-dragoman"
 version = "0.2.0"
 description = "Translate maps between Open Doctrines and Greater Diplomacy 5"
 readme = "README.md"

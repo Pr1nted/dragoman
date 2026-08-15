@@ -4,7 +4,7 @@ Pick the row that describes you.
 
 | You want to… | Do this |
 |---|---|
-| Convert maps, from a terminal or from Python | `pip install dragoman` |
+| Convert maps, from a terminal or from Python | `pip install open-dragoman` |
 | Convert maps, no Python at all | [Download a release binary](#a-release-binary) |
 | Call it from your own C or C++ project | [Build from source](#from-source) or use CMake `FetchContent` |
 | Work on Dragoman itself | [Build from source](#from-source) |
@@ -12,7 +12,7 @@ Pick the row that describes you.
 ## pip
 
 ```bash
-pip install dragoman
+pip install open-dragoman
 ```
 
 That is the whole thing. The wheel carries the compiled library **inside** the

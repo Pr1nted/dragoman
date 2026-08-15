@@ -1,4 +1,4 @@
-# Wheels for PyPI, so that installing this is `pip install dragoman` and not a
+# Wheels for PyPI, so that installing this is `pip install open-dragoman` and not a
 # paragraph about CMake.
 #
 # The wheel carries the compiled library inside the package, so there is no
@@ -8,7 +8,7 @@
 # convert a map is asking them not to bother.
 #
 # PUBLISHING NEEDS ONE SETUP STEP, ONCE. On PyPI, add this repository as a
-# trusted publisher for the project `dragoman`:
+# trusted publisher for the project `open-dragoman`:
 #   https://pypi.org/manage/account/publishing/
 #   owner: Pr1nted   repository: dragoman   workflow: wheels.yml
 #   environment: pypi

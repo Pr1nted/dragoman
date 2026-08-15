@@ -3,7 +3,7 @@
 ## Install
 
 ```bash
-pip install dragoman
+pip install open-dragoman
 ```
 
 No compiler needed — the wheel carries the library. Other ways in, including
