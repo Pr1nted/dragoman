@@ -177,7 +177,7 @@ an accessor per field.
 
 Two numbers that move for different reasons:
 
-- **Library version** (`VERSION`, semver) — the release. Currently `0.2.0`.
+- **Library version** (`VERSION`, semver) — the release. (Look in VERSION file to find current latest version).
 - **ABI version** (`DRAGOMAN_ABI_VERSION`) — bumped only when an existing symbol
   changes meaning, so a binding can refuse to load a library it cannot speak to
   without parsing semver.
