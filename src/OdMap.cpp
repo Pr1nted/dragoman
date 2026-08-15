@@ -197,20 +197,19 @@ bool readOdMap(const std::string& path, const Options& opt, World& world, Report
     const Json compass = parseMember(zip, "political_compass.json", report);
     const Json minorities = parseMember(zip, "minorities.json", report);
 
-    /* Land and sea come from the raster layer rather than from any per-province
-     * flag, because it is the layer the game itself asks. */
-    std::set<uint32_t> seaIds;
-    if (const ZipEntry* ls = zip.find("land_sea.png")) {
-        Image lsImg;
-        if (decodePng(ls->data, lsImg) && lsImg.width == world.width
-            && lsImg.height == world.height) {
-            seaIds = seaIdsFromLandSea(lsImg, world.raster);
-        } else {
-            report.warn("od.landsea",
-                        "land_sea.png is missing or a different size from provinces.png; "
-                        "every province will be treated as land");
-        }
-    }
+    /* No province read from a .odmap is sea.
+     *
+     * Open Doctrines has no such thing: water is the absence of a province,
+     * not a kind of one, and land_sea.png answers per pixel rather than per
+     * province. Deciding it from that layer by majority looked reasonable and
+     * was wrong -- it caught fifteen provinces on the world map whose pixels
+     * happen to fall under the mask, among them the Faeroes and the Isle of
+     * Man, which are islands the layer does not bother to draw as land. They
+     * crossed to GD5 as ocean tiles owned by Norway and by the Isle of Man.
+     *
+     * A .odmap that came from GD5 does have sea provinces, and they come back
+     * from the terrain the sidecar carried, below -- which is the field that
+     * actually means it. */
 
     if (provinces.is_object()) {
         for (auto it = provinces.begin(); it != provinces.end(); ++it) {
@@ -219,7 +218,6 @@ bool readOdMap(const std::string& path, const Options& opt, World& world, Report
             prov.id = static_cast<int64_t>(numberOr(p, "id", std::atof(it.key().c_str())));
             prov.name = stringOr(p, "name", "");
             prov.owner = stringOr(p, "iso_a3", "");
-            prov.is_sea = seaIds.count(static_cast<uint32_t>(prov.id)) != 0;
 
             const std::string key = idKey(prov.id);
 
@@ -360,6 +358,13 @@ bool readOdMap(const std::string& path, const Options& opt, World& world, Report
         }
         readSidecarFrom(zip, world);
         restoreUnrepresentable(world, report);
+
+        /* Terrain also says whether a province is water, and a map that
+         * arrived from GD5 has one; a world that only ever set the flag has
+         * had it restored just above. Either is enough. */
+        for (auto& p : world.provinces) {
+            if (!p.is_sea) p.is_sea = isSeaTerrain(p.terrain);
+        }
 
         /* The borders that were filled in so Open Doctrines would not read
          * them as water are unpainted again here, so that the model holds the

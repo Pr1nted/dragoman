@@ -365,6 +365,9 @@ void restoreUnrepresentable(World& world, Report& report) {
         } else {
             p.terrain = was->terrain;
             p.is_coastal = was->is_coastal;
+            /* Open Doctrines has no per-province notion of water at all, so
+             * this can only come back from the record. */
+            p.is_sea = was->is_sea;
             /* Open Doctrines has claims but no cores, so a province's core
              * list has nowhere to live in a .odmap and comes back from here. */
             p.cores = was->cores;
