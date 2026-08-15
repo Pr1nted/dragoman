@@ -265,6 +265,64 @@ std::map<uint32_t, std::pair<int, int>> computeCenters(
     return mean;
 }
 
+std::vector<uint32_t> fillGaps(const std::vector<uint32_t>& ids, int w, int h, bool wrap_x,
+                               std::vector<uint8_t>* gap_mask, int max_distance) {
+    std::vector<uint32_t> out = ids;
+    if (w <= 0 || h <= 0) return out;
+    const size_t n = out.size();
+
+    if (gap_mask) {
+        gap_mask->assign(n, 0);
+        for (size_t i = 0; i < n; ++i) {
+            if (ids[i] == 0) (*gap_mask)[i] = 255;
+        }
+    }
+
+    /* Every painted pixel is a source, so the frontier advances one ring of
+     * distance at a time and each gap is claimed by the nearest province
+     * rather than by whichever happened to reach it first. */
+    std::vector<size_t> frontier;
+    frontier.reserve(n / 4);
+    for (size_t i = 0; i < n; ++i) {
+        if (out[i] != 0) frontier.push_back(i);
+    }
+    if (frontier.empty() || frontier.size() == n) return out;
+
+    /* Bounded, as a backstop. A border left by GD5's painter is three pixels
+     * across, so everything real is reached in the first few rings; the limit
+     * only matters if this is ever pointed at a raster whose blank areas are
+     * genuine open water, where an unbounded fill would march out and turn an
+     * ocean into land. */
+    std::vector<size_t> next;
+    for (int distance = 0; !frontier.empty() && (max_distance <= 0 || distance < max_distance);
+         ++distance) {
+        next.clear();
+        for (size_t i : frontier) {
+            const int x = static_cast<int>(i % static_cast<size_t>(w));
+            const int y = static_cast<int>(i / static_cast<size_t>(w));
+            const uint32_t id = out[i];
+
+            const int dx[4] = {1, -1, 0, 0};
+            const int dy[4] = {0, 0, 1, -1};
+            for (int d = 0; d < 4; ++d) {
+                int nx = x + dx[d];
+                const int ny = y + dy[d];
+                if (ny < 0 || ny >= h) continue;
+                if (nx < 0 || nx >= w) {
+                    if (!wrap_x) continue;
+                    nx = (nx + w) % w;   /* the map is a cylinder */
+                }
+                const size_t j = static_cast<size_t>(ny) * w + nx;
+                if (out[j] != 0) continue;
+                out[j] = id;
+                next.push_back(j);
+            }
+        }
+        frontier.swap(next);
+    }
+    return out;
+}
+
 std::set<uint32_t> computeCoastal(const std::map<uint32_t, std::set<uint32_t>>& adj,
                                   const std::set<uint32_t>& sea_ids) {
     std::set<uint32_t> coastal;

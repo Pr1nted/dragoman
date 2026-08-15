@@ -360,6 +360,29 @@ bool readOdMap(const std::string& path, const Options& opt, World& world, Report
         }
         readSidecarFrom(zip, world);
         restoreUnrepresentable(world, report);
+
+        /* The borders that were filled in so Open Doctrines would not read
+         * them as water are unpainted again here, so that the model holds the
+         * raster the source game actually had and a crossing back to GD5
+         * reproduces it pixel for pixel. */
+        const auto gaps = world.sidecar_blobs.find("gaps/id_gaps.png");
+        if (gaps != world.sidecar_blobs.end()) {
+            Image mask;
+            if (decodePng(gaps->second, mask) && mask.width == world.width
+                && mask.height == world.height) {
+                long restored = 0;
+                for (size_t i = 0; i < world.raster.size(); ++i) {
+                    if (mask.rgba[i * 4] > 128) {
+                        world.raster[i] = 0;
+                        ++restored;
+                    }
+                }
+                report.info("od.unfilled",
+                            "unpainted " + std::to_string(restored)
+                                + " pixels that were filled in to make this map readable as an "
+                                  "Open Doctrines landmass");
+            }
+        }
     }
 
     report.info("od.read", "read " + std::to_string(world.provinces.size()) + " provinces and "
@@ -540,10 +563,61 @@ bool writeOdMap(const std::string& path, const World& world, const Options& opt,
         }
     }
 
-    /* ---- the layers ---- */
-    const Image provImg = rasterToOd(world.raster, world.width, world.height);
+    /* ---- the layers ----
+     *
+     * Open Doctrines reads an unpainted pixel as water: 67% of its 1914
+     * province raster is unassigned and its land mask agrees to within a
+     * rounding error, so for this format province coverage and landmass are
+     * the same thing. GD5 reads the same pixel as "not painted yet" -- its map
+     * painter samples every third pixel and leaves the border between any two
+     * provinces blank, which is 37% of its 1914 scenario.
+     *
+     * Written across unchanged, every one of those borders would become a sea
+     * channel three pixels wide, cutting a shipping lane along each provincial
+     * boundary in Europe. So a map whose water is made of provinces -- which
+     * is how we know it came from a game that paints borders -- has its gaps
+     * filled from the nearest province first. The mask of what was filled goes
+     * in the sidecar, so the crossing back restores the borders exactly and
+     * the round trip still holds.
+     */
+    std::vector<uint32_t> raster = world.raster;
+    std::map<std::string, std::vector<uint8_t>> extraBlobs;
+
+    /* Which of the two meanings this raster's blank pixels carry is decided by
+     * counting, not by guessing at the source: if most of the map's water is
+     * covered by sea provinces then the game that drew it paints its oceans,
+     * and what is left blank is border. If the water is mostly blank then the
+     * blanks *are* the water and filling them would turn the Atlantic into
+     * land -- which is exactly what an earlier version of this did to every
+     * Open Doctrines map that crossed. */
+    long seaPixels = 0, gapPixels = 0;
+    for (uint32_t id : world.raster) {
+        if (id == 0) ++gapPixels;
+        else if (seaIds.count(id)) ++seaPixels;
+    }
+    const bool provincedWater = seaPixels > 0 && seaPixels * 2 >= gapPixels;
+
+    if (provincedWater) {
+        std::vector<uint8_t> mask;
+        std::vector<uint32_t> filled = fillGaps(world.raster, world.width, world.height,
+                                                /*wrap_x=*/true, &mask);
+        long gaps = 0;
+        for (uint8_t m : mask) {
+            if (m) ++gaps;
+        }
+        if (gaps > 0) {
+            raster = std::move(filled);
+            extraBlobs["gaps/id_gaps.png"] = encodePngGray(mask, world.width, world.height);
+            report.info("od.filled",
+                        "filled " + std::to_string(gaps)
+                            + " unpainted pixels from their nearest province, because Open "
+                              "Doctrines reads an unpainted pixel as open water");
+        }
+    }
+
+    const Image provImg = rasterToOd(raster, world.width, world.height);
     zip.put("provinces.png", encodePng(provImg));
-    zip.put("land_sea.png", encodePng(landSeaImage(world.raster, world.width, world.height, seaIds)));
+    zip.put("land_sea.png", encodePng(landSeaImage(raster, world.width, world.height, seaIds)));
 
     Json meta = Json::object();
     meta["name"] = world.name;
@@ -590,7 +664,7 @@ bool writeOdMap(const std::string& path, const World& world, const Options& opt,
         if (!zip.has(name)) zip.put(name, kv.second);
     }
 
-    if (opt.carry_sidecar) writeSidecarInto(zip, world);
+    if (opt.carry_sidecar) writeSidecarInto(zip, world, extraBlobs);
 
     /* Restore the member order the archive had, so that two versions of a map
      * diff on content rather than on layout. */
@@ -628,6 +702,28 @@ bool writeOdMap(const std::string& path, const World& world, const Options& opt,
     if (!writeZip(path, zip, err)) {
         setLastError(err);
         return false;
+    }
+
+    /* GD5's `materials` and Open Doctrines' `treasury` are both "what this
+     * country has to spend", and they are not the same number. GD5 scenarios
+     * start their nations at zero and let them accumulate -- its 1914 scenario
+     * gives 765 of 766 nations nothing at all -- while Open Doctrines expects
+     * a starting endowment and its shipped 1914 map hands out a median of 10.
+     * Translated faithfully, that zero is still zero, and the first simulated
+     * turn bankrupts the entire world. Saying so is the honest thing; picking
+     * a number out of the air and calling it a translation is not. */
+    long funded = 0;
+    for (const auto& n : world.nations) {
+        if (n.treasury > 0.0) ++funded;
+    }
+    if (!world.nations.empty() && funded * 20 < static_cast<long>(world.nations.size())) {
+        report.warn("od.treasury",
+                    "almost no nation on this map has a treasury (" + std::to_string(funded)
+                        + " of " + std::to_string(world.nations.size())
+                        + "). GD5 starts its nations with an empty stockpile and Open Doctrines "
+                          "expects a starting endowment, so the map will load and play but every "
+                          "country goes bankrupt on the first turn. Set starting treasuries in "
+                          "Open Doctrines' map editor, or in countries.json.");
     }
 
     report.info("od.write", "wrote " + std::to_string(world.provinces.size()) + " provinces to "

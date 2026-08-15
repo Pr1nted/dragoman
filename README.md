@@ -37,6 +37,14 @@ Verified against Open Doctrines and against
 [GitGetGot415/Greater-Diplomacy-5](https://github.com/GitGetGot415/Greater-Diplomacy-5).
 Reproduce with `python3 tools/conformance.py <directory of maps>`.
 
+Converted maps have also been loaded by **both games themselves**, not only by
+this library: an Open Doctrines map converted to GD5 loads through GD5's own
+`load_map_assets` with complete, symmetric adjacency and every province centre
+inside its own province; a GD5 map converted to Open Doctrines loads and plays
+five AI turns under `OpenDoctrines --simulate`. Two caveats came out of doing
+that, and both are reported by the converter rather than hidden — see
+`gd5.nosea` and `od.treasury` in [docs/mapping.md](docs/mapping.md).
+
 ## What "lossless" means here
 
 The two games are not the same game, so a straight translation always loses

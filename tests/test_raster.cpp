@@ -105,6 +105,65 @@ static void testLandSea() {
     CHECK(seaIdsFromLandSea(ls, w.raster) == sea);
 }
 
+/* The two games mean opposite things by an unpainted pixel, and getting this
+ * wrong is invisible until someone looks at the map: Open Doctrines reads a
+ * blank pixel as open water, while GD5's painter leaves the border between
+ * every pair of provinces blank. Carried across unchanged, those borders
+ * become a sea channel along every provincial boundary. */
+static void testGapFillingClosesBorders() {
+    /* Two provinces separated by a three-pixel unpainted border, exactly the
+     * width GD5's map painter leaves. */
+    const int w = 13, h = 3;
+    std::vector<uint32_t> ids(static_cast<size_t>(w) * h, 0);
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            if (x < 5) ids[y * w + x] = 7;
+            else if (x > 7) ids[y * w + x] = 9;
+        }
+    }
+
+    std::vector<uint8_t> mask;
+    const auto filled = fillGaps(ids, w, h, /*wrap_x=*/false, &mask);
+
+    for (size_t i = 0; i < filled.size(); ++i) CHECK(filled[i] != 0);
+    /* Each border pixel goes to the province actually nearest it, so the
+     * boundary lands where it was rather than sliding to whichever side was
+     * scanned first. */
+    CHECK_EQ(filled[5], 7u);
+    CHECK_EQ(filled[7], 9u);
+    /* And the mask records exactly what was filled, which is what lets the
+     * crossing back restore the borders and keep the round trip honest. */
+    long marked = 0;
+    for (size_t i = 0; i < mask.size(); ++i) {
+        CHECK_EQ(mask[i] != 0, ids[i] == 0);
+        if (mask[i]) ++marked;
+    }
+    CHECK_EQ(marked, 3L * h);
+}
+
+/* The other half of the same rule: an Open Doctrines raster is mostly blank
+ * because it is mostly ocean, and filling that would march inland province
+ * colours out across the Atlantic. The distance bound is what stops it. */
+static void testGapFillingLeavesOpenWater() {
+    const int w = 64, h = 32;
+    std::vector<uint32_t> ids(static_cast<size_t>(w) * h, 0);
+    for (int y = 14; y < 18; ++y) {
+        for (int x = 30; x < 34; ++x) ids[y * w + x] = 5;   /* one small island */
+    }
+
+    const auto filled = fillGaps(ids, w, h, /*wrap_x=*/true, nullptr, /*max_distance=*/8);
+
+    long painted = 0;
+    for (uint32_t id : filled) {
+        if (id) ++painted;
+    }
+    /* The island grew by the bound and no further; the ocean is still ocean. */
+    CHECK(painted > 16);
+    CHECK(painted < static_cast<long>(ids.size()) / 2);
+    CHECK_EQ(filled[0], 0u);                       /* far corner untouched */
+    CHECK_EQ(filled[16 * w + 0], 0u);              /* same row, other side */
+}
+
 static void testLonLat() {
     /* Ships are placed by latitude and longitude and units by province, so a
      * fleet crossing depends on this pair agreeing with the game's own. */
@@ -128,6 +187,8 @@ int main() {
     testAdjacency();
     testCenters();
     testLandSea();
+    testGapFillingClosesBorders();
+    testGapFillingLeavesOpenWater();
     testLonLat();
     return check::finish("test_raster");
 }

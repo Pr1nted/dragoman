@@ -90,6 +90,26 @@ std::map<uint32_t, std::set<uint32_t>> computeAdjacency(
 std::map<uint32_t, std::pair<int, int>> computeCenters(
     const std::vector<uint32_t>& ids, int w, int h);
 
+/* Give every unassigned pixel the province nearest to it.
+ *
+ * The two games mean different things by an id of zero. Open Doctrines means
+ * water: 67% of its 1914 raster is zero and its land mask agrees to within a
+ * rounding error, so province coverage and landmass are the same thing. GD5
+ * means "not painted yet": its map painter samples every third pixel, so the
+ * border between any two provinces is left unassigned, and 12% of its world
+ * map and 37% of its 1914 scenario is border.
+ *
+ * Carried across unchanged, those borders become water -- a sea channel three
+ * pixels wide along every provincial boundary in Europe. So they are filled
+ * from the nearest painted province before an Open Doctrines map is written,
+ * by a breadth-first expansion from every painted pixel at once, which reaches
+ * each gap from its true nearest neighbour rather than from whichever it was
+ * scanned from first. `gap_mask`, when given, records which pixels were filled
+ * so the crossing back can restore them exactly.
+ */
+std::vector<uint32_t> fillGaps(const std::vector<uint32_t>& ids, int w, int h, bool wrap_x,
+                               std::vector<uint8_t>* gap_mask, int max_distance = 8);
+
 /* Provinces with at least one sea neighbour. Both games store the flag, and
  * neither stores it reliably enough to trust over the raster. */
 std::set<uint32_t> computeCoastal(const std::map<uint32_t, std::set<uint32_t>>& adj,

@@ -97,7 +97,38 @@ editor). Ship positions are carried and return intact.
 
 Open Doctrines places ships on an equirectangular full-globe projection —
 `lon = x/w*360 − 180`, `lat = 90 − y/h*180` — which is how a fleet's position
-resolves to a province and back.
+resolves to a province and back. GD5's maps are not equirectangular and not
+2:1, so a GD5 map converted to Open Doctrines renders correctly but its
+latitudes and longitudes are nominal.
+
+### An unpainted pixel means opposite things
+
+This one is worth stating on its own, because getting it wrong is invisible
+until somebody looks at the map.
+
+| | a pixel with province id 0 means |
+|---|---|
+| Open Doctrines | **water.** 67% of its 1914 raster is blank and its land mask agrees to within 0.0001%: province coverage *is* the landmass, and every land pixel belongs to a province. |
+| Greater Diplomacy 5 | **not painted yet.** Its map painter samples every third pixel, so the border between any two provinces is left blank — 12% of its world map, 37% of its 1914 scenario. |
+
+Carried across unchanged, every GD5 provincial border becomes a sea channel
+three pixels wide, and the continents arrive in Open Doctrines shot through
+with water. So gaps are filled from the nearest province before an Open
+Doctrines map is written — a breadth-first expansion from every painted pixel
+at once, so each gap is claimed by the province actually nearest it — and the
+mask of what was filled goes into the sidecar, so the crossing back restores
+the borders exactly and the round trip still holds.
+
+Which meaning a raster carries is decided by counting rather than by trusting
+the source: if most of the map's water is covered by sea provinces then the
+game that drew it paints its oceans and what is left blank is border. If the
+water is mostly blank then the blanks *are* the water. The fill is also bounded
+to eight pixels as a backstop, so even a misread cannot march a province colour
+out across the Atlantic.
+
+The effect on GD5's 1914 scenario: land goes from 20.3% of the map (province
+interiors only) to 24.4% once borders are closed, with zero unpainted pixels
+left inside the landmass — the same invariant Open Doctrines' own maps hold.
 
 ## Nations
 
@@ -113,6 +144,20 @@ resolves to a province and back.
 | alliance / war | `relations.json` | `allied_with`, `at_war_with` | mapped |
 | non-aggression, guarantee | `relations.json` | — | carried |
 | research, faction, manpower, fuel | — | `research`, `faction`, … | carried |
+
+### Treasury and materials are not the same number
+
+Both mean "what this country has to spend", and they are scaled and seeded
+differently. GD5 starts its nations with an empty stockpile and lets them
+accumulate — its 1914 scenario gives 765 of 766 nations nothing at all — while
+Open Doctrines expects a starting endowment, with a median of 10 and a maximum
+of 712 on its own 1914 map.
+
+Translated faithfully, zero stays zero, and a converted map bankrupts its entire
+world on the first simulated turn. Dragoman reports this as `od.treasury` rather
+than inventing a number and calling it a translation: the remedy is to set
+starting treasuries in Open Doctrines' map editor, and only a person who knows
+what the scenario is for can choose them.
 
 ### A nation's identity is not its name
 

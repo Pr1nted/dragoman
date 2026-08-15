@@ -215,10 +215,16 @@ Json buildSidecarDoc(const World& world) {
 
 }  // namespace
 
-void writeSidecarInto(Zip& zip, const World& world) {
+void writeSidecarInto(Zip& zip, const World& world,
+                     const std::map<std::string, std::vector<uint8_t>>& extra_blobs) {
     const Json doc = buildSidecarDoc(world);
     zip.putText(std::string(kSidecarMember) + "sidecar.json", doc.dump(1, ' '));
     for (const auto& kv : world.sidecar_blobs) {
+        zip.put(std::string(kSidecarMember) + blobPath(kv.first), kv.second);
+    }
+    /* Written last so a freshly computed blob replaces the one carried in from
+     * the previous crossing rather than the other way round. */
+    for (const auto& kv : extra_blobs) {
         zip.put(std::string(kSidecarMember) + blobPath(kv.first), kv.second);
     }
 }

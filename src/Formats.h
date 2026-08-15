@@ -76,7 +76,8 @@ void eventsToGd5(const std::vector<Event>& events,
 void eventsFromGd5(const Json& raw, const std::string& owner, std::vector<Event>& out,
                    Report& report);
 
-void writeSidecarInto(Zip& zip, const World& world);
+void writeSidecarInto(Zip& zip, const World& world,
+                      const std::map<std::string, std::vector<uint8_t>>& extra_blobs = {});
 void writeSidecarInto(const std::string& dir, const World& world);
 /* The name -> ISO pairings a previous crossing settled on, read on their own
  * and before anything else. The GD5 reader needs them while it is still
