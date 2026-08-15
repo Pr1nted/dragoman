@@ -49,7 +49,7 @@ outside themselves — otherwise GD5 would draw unit counters in the sea.
 | alliance, war | ✅ | ✅ | mapped |
 | non-aggression, guarantees | ✅ | — | carried |
 | leader, adjective, faction, manpower, fuel | — | ✅ | carried |
-| research | — | ✅ | **derived**, see below |
+| research | `research.json`, not yet read by the game | ✅ | **mapped**, see below |
 
 **A GD5 nation's identity is its key in `nation_data`, not its `name` field.**
 The two are allowed to disagree, and in GD5's own 1914 scenario two separate
@@ -112,8 +112,23 @@ rule, reading the tech tree out of the GD5 installation being written into —
 not a copy kept in this library, which would go stale the moment anyone modded a
 technology.
 
-A nation that arrives *with* research keeps exactly what it had. Going the other
-way there is nowhere to put it, so it rides in the sidecar and returns intact.
+A nation that arrives *with* research keeps exactly what it had — a carried
+node list takes precedence over the date rule.
+
+Going the other way, Dragoman writes `research.json` into the `.odmap`, mapping
+GD5's levelled technologies onto Open Doctrines' named nodes. **Open Doctrines
+does not read that file yet**, so today the field is carried and inert; making
+it take effect is about fifteen lines in the game, written out in
+[docs/research.md](https://github.com/Pr1nted/open-dragoman/blob/main/docs/research.md).
+Round trips do not depend on any of this — the exact GD5 table rides in the
+sidecar and returns intact either way.
+
+Only the numbered ladders are translated (`ind`, `navy`, `arty`, `conscript`),
+because only they mean the same thing on both sides. Forts and ports have no
+GD5 counterpart and are never invented; the branching army nodes sit in mutex
+groups a prefix would violate. Technologies with a ceiling of 1 — GD5 has five,
+including `basic_factory` and `dreadnought` — are flags rather than scales, and
+count for the first rung of a ladder rather than the whole of it.
 
 ## Scripts
 

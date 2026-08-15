@@ -4,6 +4,40 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [semver](https://semver.org/), with a separate ABI version — see
 [docs/versioning.md](docs/versioning.md).
 
+## Unreleased
+
+### Added
+
+- **Research crosses into Open Doctrines.** A `.odmap` written from a GD5 map
+  now carries `research.json`: ISO code to a sorted list of Open Doctrines
+  research nodes, mapped from GD5's levelled technologies. Read back on the
+  next crossing, where it takes precedence over research derived from the map's
+  date.
+
+  Open Doctrines does not read this file — no existing extension point can
+  apply it, since the Gearbox `Research.Write` capability exposes only
+  `set_country_funding`. The field is carried and inert until the game reads
+  it; [docs/research.md](docs/research.md) sets out the change that would make
+  it take effect, and what crosses and what deliberately does not.
+
+  Round trips never depended on this and still do not: the exact GD5 table
+  rides in the sidecar.
+
+### Fixed
+
+- **A single boolean unlock granted an entire research ladder.** Five GD5
+  technologies have `max_lvl: 1` — `basic_factory`, `bergius_process`,
+  `battleship`, `dreadnought`, `basic_recruitment` — and are held or not held.
+  Read as a fraction of their ceiling each scored 1.0, so one of them carried a
+  nation to `ind10` or `navy10` off an unlock it had at the start of the game.
+  A flag now earns the first rung of its ladder and no more. An absent ceiling
+  is treated separately again and grants nothing, which is not the same thing.
+
+- **A ladder gained a rung every time a map changed hands.** Writing rounded to
+  nearest and reading rounded up, so `ind3` went out as a level that came back
+  `ind4`. Writing now rounds down, and every rung of every ladder survives the
+  crossing exactly.
+
 ## 0.2.2 — 2026-08-15
 
 The C++ wrapper was unusable and nothing here noticed, because nothing here

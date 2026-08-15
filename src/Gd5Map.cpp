@@ -134,7 +134,7 @@ std::string provinceKey(int64_t id) {
  * library, which would go stale the moment anyone modded a tech or shifted a
  * year, and is not ours to carry about anyway.
  */
-std::string findTechTree(const std::string& map_dir) {
+std::string findTechTreePath(const std::string& map_dir) {
     /* A map is written into <gd5>/base_maps/<name> or
      * <gd5>/scenarios/<kind>/<name>, so the install is a few levels up. */
     fs::path here = fs::absolute(map_dir);
@@ -356,6 +356,17 @@ SynthesisedOcean synthesiseOcean(std::vector<uint32_t>& ids, int w, int h,
 }
 
 }  // namespace
+
+/* GD5's tech tree, read from the installation a map sits in. Shared with the
+ * Open Doctrines writer, which needs the same ceilings to turn a research node
+ * back into a level. */
+Json readTechTree(const std::string& gd5_map_dir) {
+    const std::string path = findTechTreePath(gd5_map_dir);
+    if (path.empty()) return Json::object();
+    Report quiet;
+    const Json tree = readJsonFile(path, quiet);
+    return tree.is_object() ? tree : Json::object();
+}
 
 bool isSeaTerrain(const std::string& t) {
     return t == "ocean" || t == "coastal_sea" || t == "inland_sea" || t == "lakes";
@@ -645,6 +656,11 @@ bool readGd5Map(const std::string& dir, const Options& opt, World& world, Report
         }
         world.sidecar["gd5"]["meta"] = settings;
         world.sidecar["gd5"]["history"] = readJsonFile(joinPath(dir, "history.json"), report);
+        /* Carried so the Open Doctrines writer can turn levelled technologies
+         * into research nodes: it needs each tech's ceiling, and by then the
+         * GD5 installation is no longer in reach. */
+        const Json tree = readTechTree(dir);
+        if (!tree.empty()) world.sidecar["gd5"]["tech_tree"] = tree;
 
         /* The hand-painted terrain layer is the one thing here that cannot be
          * regenerated from the model without loss: two provinces of the same
@@ -1102,7 +1118,7 @@ bool writeGd5Map(const std::string& dir, const World& world, const Options& opt,
         }
     }
     if (unresearched > 0) {
-        const std::string treePath = findTechTree(dir);
+        const std::string treePath = findTechTreePath(dir);
         if (treePath.empty()) {
             report.warn("gd5.research",
                         std::to_string(unresearched)
@@ -1117,12 +1133,47 @@ bool writeGd5Map(const std::string& dir, const World& world, const Options& opt,
                 report.warn("gd5.research", "GD5's tech tree at " + treePath + " could not be read");
             } else {
                 const Json levels = timeAppropriateResearch(tree, world.date.year);
+                long fromNodes = 0;
                 for (auto it = nationData.begin(); it != nationData.end(); ++it) {
                     if (it.value().contains("research") && it.value()["research"].is_object()
                         && !it.value()["research"].empty()) {
                         continue;
                     }
+                    /* A map that carries Open Doctrines research says more
+                     * about this nation than its date does, so it wins. */
+                    const Nation* n = nullptr;
+                    for (const auto& candidate : world.nations) {
+                        if (nameOf(candidate.key) == it.key()) { n = &candidate; break; }
+                    }
+                    std::vector<std::string> nodes;
+                    if (n) {
+                        const auto od = n->extra.find("od");
+                        if (od != n->extra.end() && od->contains("research")
+                            && (*od)["research"].is_array()) {
+                            for (const auto& id : (*od)["research"]) {
+                                if (id.is_string()) nodes.push_back(id.get<std::string>());
+                            }
+                        }
+                    }
+                    if (!nodes.empty()) {
+                        const Json translated = researchGd5FromNodes(nodes, tree);
+                        if (!translated.empty()) {
+                            Json merged = levels;
+                            for (auto t = translated.begin(); t != translated.end(); ++t) {
+                                merged[t.key()] = t.value();
+                            }
+                            it.value()["research"] = merged;
+                            ++fromNodes;
+                            continue;
+                        }
+                    }
                     it.value()["research"] = levels;
+                }
+                if (fromNodes > 0) {
+                    report.info("gd5.research",
+                                "translated the research of " + std::to_string(fromNodes)
+                                    + " nation(s) from the nodes carried in the map, rather than "
+                                      "from its date");
                 }
                 if (!meta.contains("default_research") || meta["default_research"].is_null()) {
                     meta["default_research"] = levels;

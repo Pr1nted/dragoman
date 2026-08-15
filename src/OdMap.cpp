@@ -98,6 +98,7 @@ bool readOdMap(const std::string& path, const Options& opt, World& world, Report
     const Json relations = parseMember(zip, "relations.json", report);
     const Json claims = parseMember(zip, "claims.json", report);
     const Json countryCompass = parseMember(zip, "country_compass.json", report);
+    const Json researched = parseMember(zip, "research.json", report);
     const Json startingPolicies = parseMember(zip, "starting_policies.json", report);
 
     std::map<int64_t, std::string> countryIdToIso;
@@ -139,6 +140,13 @@ bool readOdMap(const std::string& path, const Options& opt, World& world, Report
             }
             if (countryCompass.is_object() && countryCompass.contains(n.key)) {
                 extra["country_compass"] = countryCompass[n.key];
+            }
+            /* research.json: the field that lets GD5's research mean something
+             * on this side. See docs/research.md -- the game does not read it
+             * yet, but the map carries it and a crossing back restores it. */
+            if (researched.is_object() && researched.contains(n.key)
+                && researched[n.key].is_array()) {
+                extra["research"] = researched[n.key];
             }
             if (startingPolicies.is_object()) {
                 const auto sp = startingPolicies.find("starting_policies");
@@ -326,7 +334,7 @@ bool readOdMap(const std::string& path, const Options& opt, World& world, Report
         static const char* modelled[] = {
             "metadata.json", "provinces.json", "countries.json", "population.json",
             "resources.json", "ports.json", "armies.json", "ships.json",
-            "relations.json", "claims.json", "provinces.png", "land_sea.png",
+            "relations.json", "claims.json", "provinces.png", "land_sea.png", "research.json",
             "political.png", "political_compass.json", "country_compass.json",
             "minorities.json"};
         Json carried = Json::object();
@@ -400,6 +408,19 @@ bool readOdMap(const std::string& path, const Options& opt, World& world, Report
 bool writeOdMap(const std::string& path, const World& world, const Options& opt, Report& report) {
     Zip zip;
 
+    /* A nation arriving from GD5 has a table of levelled technologies and no
+     * research nodes. Translating it gives the .odmap something to carry in
+     * research.json rather than only inside this library's own sidecar, which
+     * is what makes the data legible to anything else that opens the map. The
+     * tech tree comes from the GD5 installation the map came out of, because a
+     * level means nothing without the ceiling it is measured against. */
+    Json techTree = Json::object();
+    const auto carriedTree = world.sidecar.find("gd5");
+    if (carriedTree != world.sidecar.end() && carriedTree->contains("tech_tree")
+        && (*carriedTree)["tech_tree"].is_object()) {
+        techTree = (*carriedTree)["tech_tree"];
+    }
+
     /* A nation needs a numeric id in this format and a name in the other, and
      * only one of the two games stores both. Ids are assigned in nation order
      * so that a map written twice is written the same way. */
@@ -426,6 +447,7 @@ bool writeOdMap(const std::string& path, const World& world, const Options& opt,
     Json claims = Json::object();
     Json countryCompass = Json::object();
     Json startingPolicies = Json::object();
+    Json researchNodes = Json::object();
 
     for (const auto& n : world.nations) {
         Json c = Json::object();
@@ -450,11 +472,32 @@ bool writeOdMap(const std::string& path, const World& world, const Options& opt,
         }
         c["treasury"] = n.treasury;
 
+        /* Filled in only where Open Doctrines has nothing of its own: a map
+         * that already names its research keeps what it says. */
+        Json nodesForNation;
+        {
+            const auto od = n.extra.find("od");
+            const bool alreadyHas = od != n.extra.end() && od->contains("research")
+                                    && (*od)["research"].is_array()
+                                    && !(*od)["research"].empty();
+            if (!alreadyHas && !techTree.empty()) {
+                const auto gd5 = n.extra.find("gd5");
+                if (gd5 != n.extra.end() && gd5->contains("research")
+                    && (*gd5)["research"].is_object()) {
+                    const std::vector<std::string> nodes =
+                        researchNodesFromGd5((*gd5)["research"], techTree);
+                    if (!nodes.empty()) nodesForNation = nodes;
+                }
+            }
+        }
+        if (!nodesForNation.is_null()) researchNodes[n.key] = nodesForNation;
+
         const auto extraIt = n.extra.find("od");
         if (extraIt != n.extra.end() && extraIt->is_object()) {
             for (auto f = extraIt->begin(); f != extraIt->end(); ++f) {
                 if (f.key() == "country_compass") { countryCompass[n.key] = f.value(); continue; }
                 if (f.key() == "starting_policies") { startingPolicies[n.key] = f.value(); continue; }
+                if (f.key() == "research") { researchNodes[n.key] = f.value(); continue; }
                 c[f.key()] = f.value();
             }
         }
@@ -643,6 +686,14 @@ bool writeOdMap(const std::string& path, const World& world, const Options& opt,
     zip.putText("political_compass.json", compass.dump());
     zip.putText("country_compass.json", countryCompass.dump());
     zip.putText("minorities.json", minorities.dump());
+    if (!researchNodes.empty()) {
+        zip.putText("research.json", researchNodes.dump());
+        report.info("od.research",
+                    "wrote research.json for " + std::to_string(researchNodes.size())
+                        + " nation(s). Open Doctrines does not read this file yet -- see "
+                          "docs/research.md for the fifteen lines in Game_Loading.cpp that "
+                          "would make it take effect.");
+    }
     if (!startingPolicies.empty()) {
         zip.putText("starting_policies.json", Json{{"starting_policies", startingPolicies}}.dump());
     }

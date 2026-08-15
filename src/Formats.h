@@ -19,6 +19,21 @@ struct Options {
     bool synthesise_ocean = true;
 };
 
+/* ----------------------------------------------------------------- research
+ *
+ * Open Doctrines names what a country has researched; GD5 gives each of its
+ * technologies a level. Only the numbered ladders correspond -- see
+ * Research.cpp for what is translated and, more importantly, what is not.
+ * Both need GD5's tech tree, because a GD5 level means nothing without the
+ * ceiling it is measured against.
+ */
+std::vector<std::string> researchNodesFromGd5(const Json& research, const Json& tech_tree);
+Json researchGd5FromNodes(const std::vector<std::string>& nodes, const Json& tech_tree);
+
+/* GD5's tech tree, from the installation beside a map directory, or an empty
+ * object when there is none to read. */
+Json readTechTree(const std::string& gd5_map_dir);
+
 /* Where the synthesised sea provinces are recorded, so the crossing back can
  * delete exactly the ones this library invented and nothing else. */
 extern const char* kSyntheticOceanKey;

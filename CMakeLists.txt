@@ -69,6 +69,7 @@ set(DRAGOMAN_SOURCES
     src/ModelJson.cpp
     src/OdMap.cpp
     src/Raster.cpp
+    src/Research.cpp
     src/Scripts.cpp
     src/Support.cpp
     src/Zip.cpp
