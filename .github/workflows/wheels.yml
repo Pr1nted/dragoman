@@ -31,12 +31,17 @@ on:
 jobs:
   # Nothing is released until CI has passed on this exact commit.
   #
+  # Named "wait for CI" rather than anything with "must pass" in it: when this
+  # workflow goes red because a later job failed, the job list is the first
+  # thing anyone reads, and a gate called "CI must pass first" sitting at the
+  # top of a failed run reads like CI is what broke.
+  #
   # A tag used to start this workflow and the CI run side by side, so a release
   # could be built, attached and published while CI was still going -- or after
   # it had already failed. A release that its own tests reject is worse than no
   # release, because it is the one people install.
   gate:
-    name: CI must pass first
+    name: wait for CI
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
