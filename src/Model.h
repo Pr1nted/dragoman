@@ -36,7 +36,12 @@ struct Date {
     int  year  = 1;
     int  month = 1;   /* 1-12, human numbering; GD5's own 0-11 is converted */
     int  day   = 1;
-    long turn  = 0;
+    /* int64_t, not long: `long` is 64-bit on Linux and macOS and 32-bit on
+     * MSVC, so this field silently changed width with the compiler and reading
+     * a turn counter out of JSON narrowed on Windows. Every other integer in
+     * this model is already fixed-width for the same reason -- the two games'
+     * files are read by whichever build happens to open them. */
+    int64_t turn = 0;
     bool ad    = true;
 };
 

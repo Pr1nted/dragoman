@@ -56,12 +56,22 @@ dragoman = "dragoman.__main__:main"
 [tool.scikit-build]
 wheel.packages = ["bindings/python/dragoman"]
 cmake.version = ">=3.16"
+# One wheel for every Python 3, not one per interpreter. Nothing here is
+# compiled against CPython's ABI -- the library is plain C loaded by ctypes --
+# so the default `cp314-cp314-…` tag would have restricted a wheel to the exact
+# interpreter that happened to build it, and left everyone else compiling from
+# source for no reason.
+wheel.py-api = "py3"
 build-dir = "build/{wheel_tag}"
 # Only the library is wanted here; the CLI and the tests are for a source
 # checkout, and building them would slow every wheel down for nothing.
 install.components = ["python"]
 
 [tool.scikit-build.cmake.define]
+# Built against an old macOS so the wheel is tagged for one. Left alone, the
+# tag is whatever the build machine runs -- macosx_26_0 here -- and pip on any
+# older Mac refuses to install it.
+CMAKE_OSX_DEPLOYMENT_TARGET = "11.0"
 DRAGOMAN_PYTHON_WHEEL = "ON"
 DRAGOMAN_BUILD_SHARED = "ON"
 DRAGOMAN_BUILD_TESTS = "OFF"
