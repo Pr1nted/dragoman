@@ -22,6 +22,27 @@
 
 namespace dragoman {
 
+/* Everything below is in an inline namespace, so a caller still writes
+ * dragoman::World and dragoman::Options while the symbols mangle as
+ * dragoman::api::World and dragoman::api::Options.
+ *
+ * That is not decoration. The library's own implementation uses this same
+ * namespace and already has types called Options, Report, Diagnostic and
+ * World -- different types, same names -- and the static archive exports them:
+ * dragoman::Report::add, dragoman::Report::info and the rest are all in there.
+ * A consumer that included this header and linked the static library therefore
+ * had two definitions of dragoman::Report in one program, whose implicit copy
+ * constructors and destructors mangle identically and have different layouts.
+ * The linker picks one. The result was a segfault on destruction, with the
+ * map's name sitting where the world handle should have been.
+ *
+ * It only bit the static library, because the shared one is built with hidden
+ * visibility and exports nothing but the C ABI -- which is why the Python
+ * binding and the command line tool were never affected, and why this went
+ * unnoticed.
+ */
+inline namespace api {
+
 enum class Format { Unknown = DG_FORMAT_UNKNOWN, Odmap = DG_FORMAT_ODMAP, Gd5 = DG_FORMAT_GD5 };
 enum class Severity { Info = DG_INFO, Warning = DG_WARNING, Error = DG_ERROR };
 
@@ -154,6 +175,7 @@ inline bool roundtripCheck(const std::string& path, Format to, const Options& op
     return rc == 1;
 }
 
+}  // namespace api
 }  // namespace dragoman
 
 #endif

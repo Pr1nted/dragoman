@@ -9,9 +9,38 @@ permissions:
   contents: write
 
 jobs:
+  # Nothing is released until CI has passed on this exact commit.
+  #
+  # A tag used to start this workflow and the CI run side by side, so a release
+  # could be built, attached and published while CI was still going -- or after
+  # it had already failed. A release that its own tests reject is worse than no
+  # release, because it is the one people install.
+  gate:
+    name: CI must pass first
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for CI on this commit
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.sha }}
+          check-name: version consistency
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 20
+      - name: Wait for every platform
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.sha }}
+          running-workflow-name: ${{ github.workflow }}
+          check-regexp: '^(ubuntu|macos|windows)-latest$'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 20
+          allowed-conclusions: success
+
   # A tag that disagrees with VERSION would publish a library reporting a
   # version it is not, so this runs before anything is built.
   check:
+    needs: gate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -47,6 +47,19 @@ jobs:
         env:
           DRAGOMAN_BUILD_DIR: ${{ github.workspace }}/build
 
+      # The only step that tests the *installed* library rather than the build
+      # tree: a separate project, find_package, the public headers. It is what
+      # catches a missing package config, or a static archive that cannot link
+      # on its own -- and it is the only thing that reproduced the namespace
+      # collision between the C++ wrapper and the library's own types, which
+      # every in-tree test passed straight through.
+      - name: C++ consumer against the installed library
+        shell: bash
+        run: |
+          cmake --install build --config Release --prefix "$PWD/_prefix"
+          cmake -S bindings/cpp -B _consumer -DCMAKE_PREFIX_PATH="$PWD/_prefix"
+          cmake --build _consumer --config Release
+
       - name: CLI smoke test
         shell: bash
         run: |

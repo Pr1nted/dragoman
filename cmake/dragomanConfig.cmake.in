@@ -1,0 +1,10 @@
+@PACKAGE_INIT@
+
+# Everything this library needs is inside it: miniz, stb and nlohmann/json are
+# compiled into the archive rather than left as separate things to find, so
+# there is no find_dependency() call here and nothing for a consumer to install
+# first.
+
+include("${CMAKE_CURRENT_LIST_DIR}/dragomanTargets.cmake")
+
+check_required_components(dragoman)

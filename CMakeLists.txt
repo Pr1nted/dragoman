@@ -25,24 +25,36 @@ option(DRAGOMAN_PYTHON_WHEEL "Install only the shared library, into the Python p
 # Open Doctrines itself builds against, so an archive this library writes is
 # read back by exactly the code that will open it in the game. nlohmann/json
 # is the same single header the game uses. All three are MIT or public domain.
-add_library(dragoman_thirdparty STATIC
+# Split in two on purpose. The headers are an INTERFACE target, because the
+# library's own headers include nlohmann/json and so every test that includes
+# them needs the path. The compiled sources are an OBJECT library, so their
+# objects end up *inside* libdragoman.a rather than in a second archive a
+# consumer would have to know about and link separately -- an installed static
+# library that cannot link on its own is not installed.
+set(DRAGOMAN_THIRDPARTY_INCLUDES
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/miniz"
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb"
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/json"
+    "${CMAKE_CURRENT_BINARY_DIR}/thirdparty_include")
+
+# For the tests, which include the library's own headers and so need
+# nlohmann/json on their path. Never linked into an exported target.
+add_library(dragoman_thirdparty_headers INTERFACE)
+target_include_directories(dragoman_thirdparty_headers INTERFACE
+    ${DRAGOMAN_THIRDPARTY_INCLUDES})
+
+add_library(dragoman_thirdparty OBJECT
     third_party/miniz/miniz.c
     third_party/miniz/miniz_tdef.c
     third_party/miniz/miniz_tinfl.c
     third_party/miniz/miniz_zip.c
     third_party/stb/stb_impl.c
 )
-target_include_directories(dragoman_thirdparty PUBLIC
-    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/miniz"
-    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb"
-    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/json"
-)
 # nlohmann/json ships as json.hpp; the library includes it by its usual path.
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/thirdparty_include/nlohmann")
 configure_file(third_party/json/json.hpp
                "${CMAKE_CURRENT_BINARY_DIR}/thirdparty_include/nlohmann/json.hpp" COPYONLY)
-target_include_directories(dragoman_thirdparty PUBLIC
-    "${CMAKE_CURRENT_BINARY_DIR}/thirdparty_include")
+target_include_directories(dragoman_thirdparty PRIVATE ${DRAGOMAN_THIRDPARTY_INCLUDES})
 
 if(NOT MSVC)
     target_compile_options(dragoman_thirdparty PRIVATE -w)
@@ -62,7 +74,7 @@ set(DRAGOMAN_SOURCES
     src/Zip.cpp
 )
 
-add_library(dragoman STATIC ${DRAGOMAN_SOURCES})
+add_library(dragoman STATIC ${DRAGOMAN_SOURCES} $<TARGET_OBJECTS:dragoman_thirdparty>)
 add_library(dragoman::dragoman ALIAS dragoman)
 
 # On Windows a DLL also produces an import library, and dragoman_shared is
@@ -83,7 +95,7 @@ target_include_directories(dragoman
     PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
-target_link_libraries(dragoman PRIVATE dragoman_thirdparty)
+target_include_directories(dragoman PRIVATE ${DRAGOMAN_THIRDPARTY_INCLUDES})
 target_compile_definitions(dragoman PRIVATE DRAGOMAN_BUILDING)
 
 if(MSVC)
@@ -101,7 +113,7 @@ endif()
 # The shared build is what every non-C binding loads: Python via ctypes, Go
 # via cgo, C# via P/Invoke. It exports the C ABI and nothing else.
 if(DRAGOMAN_BUILD_SHARED)
-    add_library(dragoman_shared SHARED ${DRAGOMAN_SOURCES})
+    add_library(dragoman_shared SHARED ${DRAGOMAN_SOURCES} $<TARGET_OBJECTS:dragoman_thirdparty>)
     set_target_properties(dragoman_shared PROPERTIES
         OUTPUT_NAME dragoman
         VERSION ${PROJECT_VERSION}
@@ -116,7 +128,7 @@ if(DRAGOMAN_BUILD_SHARED)
         PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/src"
     )
-    target_link_libraries(dragoman_shared PRIVATE dragoman_thirdparty)
+    target_include_directories(dragoman_shared PRIVATE ${DRAGOMAN_THIRDPARTY_INCLUDES})
     target_compile_definitions(dragoman_shared PRIVATE DRAGOMAN_BUILDING DRAGOMAN_SHARED)
 
     # The C++ runtime is linked in statically on Linux. Nothing about this
@@ -180,3 +192,36 @@ if(DRAGOMAN_BUILD_CLI)
     install(TARGETS dragoman_cli RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+# What makes `find_package(dragoman)` work after `cmake --install`.
+#
+# The EXPORT sets above only record which targets belong to the export; without
+# installing the export itself and a config file beside it, an install put the
+# library and the headers on disk and left every CMake consumer to hardcode
+# paths. The third-party objects are folded straight into both libraries with
+# TARGET_OBJECTS rather than linked, so no internal target is recorded as a
+# dependency and the export set stays to the two things a consumer actually
+# names.
+install(EXPORT dragomanTargets
+        FILE dragomanTargets.cmake
+        NAMESPACE dragoman::
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/dragoman)
+
+include(CMakePackageConfigHelpers)
+configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/dragomanConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/dragomanConfig.cmake"
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/dragoman)
+
+# SameMajorVersion while the major is 0 would let 0.3 satisfy a request for
+# 0.2, which is exactly backwards for a project whose minor version is doing
+# the work of a major one until 1.0.
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/dragomanConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMinorVersion)
+
+install(FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/dragomanConfig.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/dragomanConfigVersion.cmake"
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/dragoman)

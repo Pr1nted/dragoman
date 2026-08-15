@@ -4,6 +4,50 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [semver](https://semver.org/), with a separate ABI version — see
 [docs/versioning.md](docs/versioning.md).
 
+## [0.2.2] — 2026-08-15
+
+The C++ wrapper was unusable and nothing here noticed, because nothing here
+used it the way a consumer does. The ABI is unchanged at 2.
+
+### Fixed
+
+- **The C++ wrapper corrupted memory when linked against the static library.**
+  `dragoman.hpp` defines `Options`, `Report`, `Diagnostic` and `World` in
+  namespace `dragoman` — and the library's own implementation already has types
+  with those exact names, which the static archive exports. Two definitions of
+  `dragoman::Report` in one program, implicit copy constructors and destructors
+  that mangle identically over different layouts, and the linker keeps one.
+  Constructing a `World` and letting it fall out of scope segfaulted, with the
+  map's name sitting in the bytes where the handle belonged.
+
+  The wrapper is now in an `inline namespace api`, so callers still write
+  `dragoman::World` while the symbols mangle apart. Only the static library was
+  affected: the shared one exports nothing but the C ABI, which is why the
+  Python binding and the CLI were always fine.
+
+- **`find_package(dragoman)` now works.** The export set was declared and never
+  installed, and no package config was generated, so `cmake --install` put
+  files on disk and left every CMake consumer to hardcode paths.
+
+- **The installed static archive links on its own.** miniz, stb and
+  nlohmann/json are compiled into it rather than left in a second archive that
+  was never installed at all.
+
+- **macOS wheels build.** cibuildwheel tagged them `macosx_10_9` while CMake
+  built for 11.0, and delocate rejected the mismatch — which is why 0.2.1 never
+  reached PyPI.
+
+### Changed
+
+- **A release is gated on CI passing that same commit.** A tag used to start
+  the release workflows alongside CI, so a release could be built and published
+  while its tests were still running, or after they had already failed.
+
+- **CI builds a real consumer against the installed library** — a separate
+  project, `find_package`, public headers only. It is the only check that
+  tests the install rather than the build tree, and the only one that
+  reproduced the namespace collision above.
+
 ## [0.2.1] — 2026-08-15
 
 The first release published from CI. Everything here is packaging and
@@ -141,6 +185,7 @@ Facts established against the real data, each of which cost a bug first:
   to GD5 arrives with nothing to sail on. Reported as `gd5.nosea` rather than
   passed over in silence.
 
+[0.2.2]: https://github.com/Pr1nted/dragoman/releases/tag/v0.2.2
 [0.2.1]: https://github.com/Pr1nted/dragoman/releases/tag/v0.2.1
 [0.2.0]: https://github.com/Pr1nted/dragoman/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Pr1nted/dragoman/releases/tag/v0.1.0

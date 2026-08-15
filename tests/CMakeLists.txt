@@ -5,8 +5,8 @@
 set(DRAGOMAN_TEST_DATA "${CMAKE_CURRENT_SOURCE_DIR}/data")
 
 function(dragoman_test name)
-    add_executable(${name} ${name}.cpp)
-    target_link_libraries(${name} PRIVATE dragoman dragoman_thirdparty)
+    add_executable(${name} ${name}.cpp ${ARGN})
+    target_link_libraries(${name} PRIVATE dragoman dragoman_thirdparty_headers)
     target_include_directories(${name} PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}"
         "${CMAKE_SOURCE_DIR}/src")
@@ -22,6 +22,7 @@ dragoman_test(test_raster)
 dragoman_test(test_scripts)
 dragoman_test(test_roundtrip)
 dragoman_test(test_abi)
+dragoman_test(test_cpp_wrapper fixture_writer.cpp)
 
 # The real maps are not in this repository -- Open Doctrines' are its own and
 # Greater Diplomacy 5's are GPL -- so the conformance suite runs only when it
