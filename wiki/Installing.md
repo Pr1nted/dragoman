@@ -77,7 +77,7 @@ the headers and the CLI under the usual prefixes.
 include(FetchContent)
 FetchContent_Declare(dragoman
     GIT_REPOSITORY https://github.com/Pr1nted/dragoman
-    GIT_TAG        v0.2.0)
+    GIT_TAG        v0.2.2)
 set(DRAGOMAN_BUILD_TESTS OFF)
 set(DRAGOMAN_BUILD_CLI OFF)
 FetchContent_MakeAvailable(dragoman)

@@ -4,7 +4,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [semver](https://semver.org/), with a separate ABI version — see
 [docs/versioning.md](docs/versioning.md).
 
-## [0.2.2] — 2026-08-15
+## 0.2.2 — 2026-08-15
 
 The C++ wrapper was unusable and nothing here noticed, because nothing here
 used it the way a consumer does. The ABI is unchanged at 2.
@@ -48,7 +48,12 @@ used it the way a consumer does. The ABI is unchanged at 2.
   tests the install rather than the build tree, and the only one that
   reproduced the namespace collision above.
 
-## [0.2.1] — 2026-08-15
+## 0.2.1 — withdrawn
+
+Tagged and then withdrawn: the release workflows still ran alongside CI rather
+than behind it, the macOS wheel failed, and nothing reached PyPI. The GitHub
+release and its tag are deleted, so there is no version of this anyone can
+install. Everything below shipped in 0.2.2.
 
 The first release published from CI. Everything here is packaging and
 portability — no map is converted differently by this version, and the ABI is
@@ -74,7 +79,7 @@ unchanged at 2.
   `dragoman_static.lib` on Windows now; consumers are unaffected, since CMake
   links by target name.
 
-## [0.2.0] — 2026-08-15
+## 0.2.0 — 2026-08-15, PyPI only
 
 Both changes here came from opening converted maps in the games themselves and
 looking at what was wrong.
@@ -133,7 +138,7 @@ looking at what was wrong.
   size, so anything compiled against ABI 1 must be rebuilt. `SOVERSION` moves
   with it.
 
-## [0.1.0] — 2026-08-15
+## 0.1.0 — never released
 
 First release. Converts maps between Open Doctrines `.odmap` archives and
 Greater Diplomacy 5 map directories, in both directions.
@@ -185,7 +190,7 @@ Facts established against the real data, each of which cost a bug first:
   to GD5 arrives with nothing to sail on. Reported as `gd5.nosea` rather than
   passed over in silence.
 
-[0.2.2]: https://github.com/Pr1nted/dragoman/releases/tag/v0.2.2
-[0.2.1]: https://github.com/Pr1nted/dragoman/releases/tag/v0.2.1
-[0.2.0]: https://github.com/Pr1nted/dragoman/releases/tag/v0.2.0
-[0.1.0]: https://github.com/Pr1nted/dragoman/releases/tag/v0.1.0
+Only 0.2.2 has a git tag and a GitHub release. 0.2.0 exists on PyPI because it
+was uploaded by hand before the release workflow worked; 0.1.0 was never
+published at all, and 0.2.1 was withdrawn. Releases:
+<https://github.com/Pr1nted/dragoman/releases>
