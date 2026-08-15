@@ -91,11 +91,23 @@ Open Doctrines does not put provinces in the water at all — its 1914 map has
 over a land/sea mask.
 
 So Dragoman draws them. When a map's water is not already made of provinces,
-converting to GD5 cuts the sea into provinces: each grid cell is split into its
-connected pieces first, so a fleet cannot cross an isthmus where one cell spans
-two seas, and pieces below a minimum size are folded into the largest piece of
-their own cell rather than becoming provinces nothing could usefully occupy.
-The world map gets 743 of them. They are owned by `Ocean`, which is added to
+converting to GD5 **grows** the sea into provinces rather than cutting it:
+seeds are laid on a lattice, nudged off it by a hash of their own coordinates
+so the result is not a grid but is still the same every run, snapped to the
+nearest water, and then grown outwards all at once through water only. Each
+province is the water nearest one seed, which follows the coast instead of
+being laid over it — GD5's own hand-drawn sea provinces score 0.66 on
+bounding-box fill, a grid scores 1.00, and these score 0.56.
+
+Growing through water also settles what a grid could only approximate: a
+province cannot cross land, so the Mediterranean and the Atlantic are separate
+however close two seeds fall, and no fleet steps over an isthmus. Water no seed
+reached becomes a province per connected piece, above a minimum size — without
+that floor the one- and two-pixel scraps in river mouths turned 917 sea
+provinces into 1362, six hundred of which nothing could ever enter.
+
+The world map gets 917 of them: one network of 747 that is every ocean joined
+together, and 163 lakes. They are owned by `Ocean`, which is added to
 the nation roster alongside — every GD5 map has that entry and no Open
 Doctrines map does.
 

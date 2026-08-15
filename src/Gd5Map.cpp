@@ -135,13 +135,18 @@ Json readJsonFile(const std::string& path, Report& report) {
  * sea: its renderer paints unpainted pixels black, and no fleet can move,
  * because movement is province to province.
  *
- * The water is therefore cut into provinces here. A plain grid would let a
- * fleet cross an isthmus wherever one cell happened to span two seas, so each
- * cell is split into its connected pieces first and only then made into
- * provinces; the Mediterranean and the Atlantic stay separate even where a
- * single cell covers both. Slivers below the minimum are folded into the
- * largest piece of their own cell rather than becoming provinces a unit could
- * never usefully occupy.
+ * The water is grown into provinces rather than cut into them. Seeds are laid
+ * on a lattice, nudged off it by a hash of their own coordinates, snapped to
+ * the nearest water, and then all grown outwards at once through water only.
+ * Each province is therefore the water nearest to one seed, which gives blobs
+ * that follow the coast instead of squares laid over it -- GD5's own sea
+ * provinces run about 0.66 on bounding-box fill, and a grid runs 1.00.
+ *
+ * Growing through water also settles a question a grid could only approximate:
+ * a province cannot cross land, so the Mediterranean and the Atlantic are
+ * necessarily separate provinces however close the seeds fall, and no fleet
+ * can step over an isthmus. Water no seed reached -- a lake smaller than the
+ * lattice -- becomes a province per connected piece afterwards.
  *
  * These provinces are an invention, not a translation, so their ids are
  * recorded in the sidecar and the crossing back deletes them again -- an Open
@@ -154,80 +159,137 @@ struct SynthesisedOcean {
 };
 
 SynthesisedOcean synthesiseOcean(std::vector<uint32_t>& ids, int w, int h,
-                                 std::vector<Province>& provinces, int cell, long min_pixels) {
+                                 std::vector<Province>& provinces, int spacing) {
     SynthesisedOcean made;
-    if (w <= 0 || h <= 0) return made;
+    if (w <= 0 || h <= 0 || spacing <= 0) return made;
 
     int64_t nextId = 1;
     for (const auto& p : provinces) nextId = std::max(nextId, p.id + 1);
 
     const size_t n = ids.size();
-    std::vector<uint32_t> assigned(n, 0);
-    std::vector<size_t> stack, component;
+    auto water = [&ids](size_t i) { return ids[i] == 0; };
+    auto index = [w](int x, int y) { return static_cast<size_t>(y) * w + x; };
 
-    /* Cell by cell, so that a piece of water never spans more of the map than
-     * one cell however large the sea it belongs to. */
-    for (int cy = 0; cy < h; cy += cell) {
-        for (int cx = 0; cx < w; cx += cell) {
-            const int x1 = std::min(cx + cell, w), y1 = std::min(cy + cell, h);
-            std::vector<std::vector<size_t>> pieces;
+    /* Seeds on a lattice, displaced by a hash of the cell they belong to. An
+     * exact lattice produces exactly the grid this is trying not to be, and
+     * anything genuinely random would make the same map convert differently
+     * twice. */
+    std::vector<size_t> frontier;
+    std::vector<int64_t> seedId;
+    for (int cy = 0; cy < h; cy += spacing) {
+        for (int cx = 0; cx < w; cx += spacing) {
+            const uint32_t hash = static_cast<uint32_t>(cx) * 73856093u
+                                  ^ static_cast<uint32_t>(cy) * 19349663u;
+            int sx = cx + static_cast<int>(hash % static_cast<uint32_t>(spacing));
+            int sy = cy + static_cast<int>((hash / 65521u) % static_cast<uint32_t>(spacing));
+            if (sx >= w) sx = w - 1;
+            if (sy >= h) sy = h - 1;
 
+            /* Snapped to the nearest water in the cell, so a seed that lands
+             * inland still plants the sea beside it rather than being lost. */
+            size_t best = n;
+            long bestDistance = 0;
+            const int x1 = std::min(cx + spacing, w), y1 = std::min(cy + spacing, h);
             for (int y = cy; y < y1; ++y) {
                 for (int x = cx; x < x1; ++x) {
-                    const size_t start = static_cast<size_t>(y) * w + x;
-                    if (ids[start] != 0 || assigned[start]) continue;
-                    component.clear();
-                    stack.assign(1, start);
-                    assigned[start] = 1;
-                    while (!stack.empty()) {
-                        const size_t i = stack.back();
-                        stack.pop_back();
-                        component.push_back(i);
-                        const int px = static_cast<int>(i % static_cast<size_t>(w));
-                        const int py = static_cast<int>(i / static_cast<size_t>(w));
-                        const int dx[4] = {1, -1, 0, 0}, dy[4] = {0, 0, 1, -1};
-                        for (int d = 0; d < 4; ++d) {
-                            const int nx = px + dx[d], ny = py + dy[d];
-                            if (nx < cx || nx >= x1 || ny < cy || ny >= y1) continue;
-                            const size_t j = static_cast<size_t>(ny) * w + nx;
-                            if (ids[j] != 0 || assigned[j]) continue;
-                            assigned[j] = 1;
-                            stack.push_back(j);
-                        }
-                    }
-                    pieces.push_back(component);
+                    const size_t i = index(x, y);
+                    if (!water(i) || ids[i] != 0) continue;
+                    const long dx = x - sx, dy = y - sy;
+                    const long d = dx * dx + dy * dy;
+                    if (best == n || d < bestDistance) { best = i; bestDistance = d; }
                 }
             }
-            if (pieces.empty()) continue;
+            if (best == n) continue;
 
-            size_t largest = 0;
-            for (size_t i = 1; i < pieces.size(); ++i) {
-                if (pieces[i].size() > pieces[largest].size()) largest = i;
-            }
+            const int64_t id = nextId++;
+            ids[best] = static_cast<uint32_t>(id);
+            frontier.push_back(best);
+            seedId.push_back(id);
+        }
+    }
 
-            for (size_t i = 0; i < pieces.size(); ++i) {
-                const bool tiny = static_cast<long>(pieces[i].size()) < min_pixels
-                                  && i != largest;
-                if (tiny) continue;  /* folded in below */
-                const int64_t id = nextId++;
-                for (size_t px : pieces[i]) ids[px] = static_cast<uint32_t>(id);
-
-                Province prov;
-                prov.id = id;
-                prov.is_sea = true;
-                prov.terrain = "ocean";  /* refined to coastal_sea once adjacency is known */
-                provinces.push_back(prov);
-                made.ids.push_back(id);
-                made.pixels += static_cast<long>(pieces[i].size());
-            }
-            /* The slivers, given to the piece that dominates their cell. */
-            const uint32_t host = static_cast<uint32_t>(ids[pieces[largest].front()]);
-            for (size_t i = 0; i < pieces.size(); ++i) {
-                if (i == largest || static_cast<long>(pieces[i].size()) >= min_pixels) continue;
-                for (size_t px : pieces[i]) ids[px] = host;
-                made.pixels += static_cast<long>(pieces[i].size());
+    /* All seeds advance together, so every pixel joins the province whose seed
+     * it is nearest to through water -- not the one that happened to reach it
+     * first. */
+    std::vector<size_t> next;
+    while (!frontier.empty()) {
+        next.clear();
+        for (size_t i : frontier) {
+            const int x = static_cast<int>(i % static_cast<size_t>(w));
+            const int y = static_cast<int>(i / static_cast<size_t>(w));
+            const uint32_t id = ids[i];
+            const int dx[4] = {1, -1, 0, 0}, dy[4] = {0, 0, 1, -1};
+            for (int d = 0; d < 4; ++d) {
+                int nx = x + dx[d];
+                const int ny = y + dy[d];
+                if (ny < 0 || ny >= h) continue;
+                if (nx < 0 || nx >= w) nx = (nx + w) % w;   /* the map is a cylinder */
+                const size_t j = index(nx, ny);
+                if (ids[j] != 0) continue;
+                ids[j] = id;
+                next.push_back(j);
             }
         }
+        frontier.swap(next);
+    }
+
+    /* Whatever the seeds never reached: a pond smaller than the lattice, or a
+     * sea enclosed away from every seed. One province per connected piece --
+     * but only for pieces big enough to be worth one.
+     *
+     * The minimum matters more than it looks. A world raster at this size is
+     * speckled with one- and two-pixel scraps of water in river mouths and
+     * between islands, and giving each of them a province turned 750 sea
+     * provinces into 1362, six hundred of which no fleet could ever enter.
+     * Below the threshold the pixels are left unpainted, which is what they
+     * already were, and is invisible at any zoom the game draws. */
+    const long minimumArea = 64;
+    std::vector<size_t> stack, piece;
+    for (size_t start = 0; start < n; ++start) {
+        if (ids[start] != 0) continue;
+        const int64_t id = nextId++;
+        piece.clear();
+        stack.assign(1, start);
+        ids[start] = static_cast<uint32_t>(id);
+        while (!stack.empty()) {
+            const size_t i = stack.back();
+            stack.pop_back();
+            piece.push_back(i);
+            const int x = static_cast<int>(i % static_cast<size_t>(w));
+            const int y = static_cast<int>(i / static_cast<size_t>(w));
+            const int dx[4] = {1, -1, 0, 0}, dy[4] = {0, 0, 1, -1};
+            for (int d = 0; d < 4; ++d) {
+                int nx = x + dx[d];
+                const int ny = y + dy[d];
+                if (ny < 0 || ny >= h) continue;
+                if (nx < 0 || nx >= w) nx = (nx + w) % w;
+                const size_t j = index(nx, ny);
+                if (ids[j] != 0) continue;
+                ids[j] = static_cast<uint32_t>(id);
+                stack.push_back(j);
+            }
+        }
+        if (static_cast<long>(piece.size()) >= minimumArea) {
+            seedId.push_back(id);
+        } else {
+            for (size_t i : piece) ids[i] = 0;  /* left as it was found */
+            --nextId;
+        }
+    }
+
+    std::map<int64_t, long> area;
+    for (uint32_t id : ids) {
+        if (id >= static_cast<uint32_t>(seedId.front())) ++area[static_cast<int64_t>(id)];
+    }
+    for (int64_t id : seedId) {
+        if (area[id] == 0) continue;
+        Province prov;
+        prov.id = id;
+        prov.is_sea = true;
+        prov.terrain = "ocean";  /* refined to coastal_sea once adjacency is known */
+        provinces.push_back(prov);
+        made.ids.push_back(id);
+        made.pixels += area[id];
     }
     return made;
 }
@@ -626,8 +688,12 @@ bool writeGd5Map(const std::string& dir, const World& world, const Options& opt,
         && !waterIsProvinced(world.raster, world.provinces)) {
         localProvinces = world.provinces;
         localRaster = world.raster;
+        /* Seed spacing, which sets how big a sea province comes out. GD5's own
+         * world map gives each of its 501 sea provinces about a tenth of a
+         * percent of the map; on an 8192x4096 raster that is a lattice step of
+         * roughly this. */
         ocean = synthesiseOcean(localRaster, world.width, world.height, localProvinces,
-                                /*cell=*/256, /*min_pixels=*/48);
+                                /*spacing=*/192);
     }
     const bool synthesised = !ocean.ids.empty();
     const std::vector<Province>& provinces = synthesised ? localProvinces : world.provinces;

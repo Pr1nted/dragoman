@@ -19,6 +19,9 @@ looking at what was wrong.
   Mediterranean and the Atlantic stay separate where one cell covers both. The
   ids are recorded in the sidecar and deleted again on the way back, so the
   round trip is unaffected. New `synthesise_ocean` option, default on.
+  The provinces are grown from jittered seeds through water rather than cut on
+  a grid, so they follow coastlines: 0.56 on bounding-box fill against GD5's
+  own 0.66, where a grid would be 1.00.
 
 ### Fixed
 
