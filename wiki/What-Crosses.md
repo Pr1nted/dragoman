@@ -119,7 +119,7 @@ Going the other way, Dragoman writes `research.json` into the `.odmap`, mapping
 GD5's levelled technologies onto Open Doctrines' named nodes. **Open Doctrines
 does not read that file yet**, so today the field is carried and inert; making
 it take effect is about fifteen lines in the game, written out in
-[docs/research.md](https://github.com/Pr1nted/open-dragoman/blob/main/docs/research.md).
+[docs/research.md](https://github.com/Pr1nted/dragoman/blob/main/docs/research.md).
 Round trips do not depend on any of this — the exact GD5 table rides in the
 sidecar and returns intact either way.
 
