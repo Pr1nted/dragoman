@@ -5,7 +5,8 @@ The version is written in four places, and three of them are easy to forget:
 
     VERSION                                  the source of truth
     include/dragoman/dragoman.h              the C macros a caller compiles against
-    bindings/python/dragoman/_version.py     what pip reports
+    bindings/python/dragoman/_version.py     what `dragoman.__version__` reports
+    pyproject.toml                           what PyPI and `pip show` report
     CMakeLists.txt                           read from VERSION, so checked by construction
 
 A release that updates some but not all of them ships a library that reports a
@@ -56,6 +57,13 @@ def main():
         fail("__version__ is not set in bindings/python/dragoman/_version.py")
     if found.group(1) != version:
         fail(f"the Python package says {found.group(1)!r}, but VERSION says {version!r}")
+
+    toml = (ROOT / "pyproject.toml").read_text()
+    found = re.search(r'^version = "([^"]+)"', toml, re.M)
+    if not found:
+        fail("pyproject.toml has no version")
+    if found.group(1) != version:
+        fail(f"pyproject.toml says {found.group(1)!r}, but VERSION says {version!r}")
 
     # The ABI version is deliberately not checked against the release version:
     # they move for different reasons and are supposed to disagree. It only has

@@ -42,7 +42,7 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip
-          python -m pip install ./bindings/python
+          python -m pip install .
           python tests/test_python.py
         env:
           DRAGOMAN_BUILD_DIR: ${{ github.workspace }}/build

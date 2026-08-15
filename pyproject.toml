@@ -1,0 +1,74 @@
+# `pip install dragoman` builds the C++ library through CMake and puts the
+# resulting shared object inside the package, beside __init__.py. So the wheel
+# is a complete install: no compiler at install time, nothing to locate
+# afterwards, and no separate step for a Greater Diplomacy 5 player who
+# installs that game by unzipping it.
+#
+# This lives at the repository root rather than beside the package so that
+# `pip install .` and `pip install git+https://…/dragoman` both work from a
+# plain checkout, which is the whole point of it being accessible.
+
+[build-system]
+requires = ["scikit-build-core>=0.8"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "dragoman"
+version = "0.2.0"
+description = "Translate maps between Open Doctrines and Greater Diplomacy 5"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { file = "LICENSE" }
+authors = [{ name = "Dragoman contributors" }]
+keywords = [
+    "grand-strategy", "map", "conversion", "opendoctrines",
+    "greater-diplomacy", "modding",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3",
+    "Topic :: Games/Entertainment",
+    "Topic :: File Formats",
+]
+# None, deliberately. The binding is ctypes and the library is in the wheel.
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/Pr1nted/dragoman"
+Documentation = "https://github.com/Pr1nted/dragoman/wiki"
+Changelog = "https://github.com/Pr1nted/dragoman/blob/main/CHANGELOG.md"
+Issues = "https://github.com/Pr1nted/dragoman/issues"
+
+[project.scripts]
+# The same command line tool, for people who installed with pip and have no
+# reason to know there is a C++ binary underneath.
+dragoman = "dragoman.__main__:main"
+
+[tool.scikit-build]
+wheel.packages = ["bindings/python/dragoman"]
+cmake.version = ">=3.16"
+build-dir = "build/{wheel_tag}"
+# Only the library is wanted here; the CLI and the tests are for a source
+# checkout, and building them would slow every wheel down for nothing.
+install.components = ["python"]
+
+[tool.scikit-build.cmake.define]
+DRAGOMAN_PYTHON_WHEEL = "ON"
+DRAGOMAN_BUILD_SHARED = "ON"
+DRAGOMAN_BUILD_TESTS = "OFF"
+DRAGOMAN_BUILD_CLI = "OFF"
+
+[tool.cibuildwheel]
+# One wheel per platform rather than per Python version: the extension is a
+# plain shared library loaded by ctypes, so it does not care which interpreter
+# it is used from.
+build-frontend = "build"
+test-command = "python -c \"import dragoman; print(dragoman.library_version())\""
+skip = ["pp*", "*-musllinux_i686"]
+
+[tool.cibuildwheel.macos]
+archs = ["universal2"]

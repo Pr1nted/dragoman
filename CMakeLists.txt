@@ -17,6 +17,7 @@ option(DRAGOMAN_BUILD_TESTS "Build the test suite" ON)
 option(DRAGOMAN_BUILD_CLI "Build the dragoman command line tool" ON)
 option(DRAGOMAN_BUILD_SHARED "Build a shared library as well as a static one" ON)
 option(DRAGOMAN_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
+option(DRAGOMAN_PYTHON_WHEEL "Install only the shared library, into the Python package" OFF)
 
 # --------------------------------------------------------------- third party
 #
@@ -105,6 +106,15 @@ if(DRAGOMAN_BUILD_SHARED)
     )
     target_link_libraries(dragoman_shared PRIVATE dragoman_thirdparty)
     target_compile_definitions(dragoman_shared PRIVATE DRAGOMAN_BUILDING DRAGOMAN_SHARED)
+
+    # The C++ runtime is linked in statically on Linux. Nothing about this
+    # library's interface is C++ -- it is loaded by ctypes, by cgo, by P/Invoke,
+    # from processes that have no reason to have libstdc++ at the version it was
+    # built against. Carrying it removes the one dependency a caller could not
+    # have predicted from the header.
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_link_options(dragoman_shared PRIVATE -static-libstdc++ -static-libgcc)
+    endif()
 endif()
 
 # ----------------------------------------------------------------------- cli
@@ -123,6 +133,26 @@ if(DRAGOMAN_BUILD_TESTS)
 endif()
 
 # ------------------------------------------------------------------- install
+
+# Building a Python wheel: the shared library goes *inside* the package, beside
+# __init__.py, which is the first place bindings/python/dragoman/_ffi.py looks.
+# That is what makes `pip install dragoman` a complete install with no compiler
+# and no separate library to find -- the audience for this includes people who
+# install Greater Diplomacy 5 by unzipping it.
+if(DRAGOMAN_PYTHON_WHEEL)
+    if(NOT DRAGOMAN_BUILD_SHARED)
+        message(FATAL_ERROR "DRAGOMAN_PYTHON_WHEEL needs DRAGOMAN_BUILD_SHARED")
+    endif()
+    # COMPONENT is repeated per artifact on purpose. Written once at the end it
+    # binds only to the group it follows, so on Linux and macOS -- where a
+    # shared library is a LIBRARY artifact, not a RUNTIME one -- the .so landed
+    # in the default component and `--install --component python` installed
+    # nothing at all. The wheel built, imported, and had no library in it.
+    install(TARGETS dragoman_shared
+            LIBRARY DESTINATION dragoman COMPONENT python
+            RUNTIME DESTINATION dragoman COMPONENT python)
+    return()   # a wheel wants the library and nothing else -- no headers, no CLI
+endif()
 
 include(GNUInstallDirs)
 install(TARGETS dragoman

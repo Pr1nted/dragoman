@@ -7,6 +7,8 @@ A *dragoman* was the interpreter attached to an embassy — the person through
 whom two powers who shared no language could still sign something.
 
 ```bash
+pip install dragoman
+
 dragoman convert 1914.odmap "base_maps/1914" --to gd5
 dragoman convert "base_maps/GD4" gd4.odmap    --to odmap
 dragoman roundtrip 1914.odmap                 # prove nothing was lost
@@ -16,7 +18,8 @@ dragoman roundtrip 1914.odmap                 # prove nothing was lost
 
 | | |
 |---|---|
-| [Getting Started](Getting-Started.md) | Build it, convert your first map, check the result |
+| [Installing](Installing.md) | `pip install dragoman`, a release binary, or from source |
+| [Getting Started](Getting-Started.md) | Convert your first map, and check the result |
 | [What Crosses](What-Crosses.md) | Which fields translate, which are computed, which ride along |
 | [Round Trips](Round-Trips.md) | What "lossless" means here, and what it does not |
 | [Scripts and Events](Scripts-and-Events.md) | The two scripting systems, and where they meet |

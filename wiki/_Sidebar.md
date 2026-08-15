@@ -1,5 +1,6 @@
 ### Dragoman
 - [Home](Home.md)
+- [Installing](Installing.md)
 - [Getting Started](Getting-Started.md)
 
 ### How it works

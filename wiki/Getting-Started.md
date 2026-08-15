@@ -1,25 +1,16 @@
 # Getting Started
 
-## Build
-
-CMake 3.16 and a C++17 compiler. Nothing else — miniz, stb and nlohmann/json
-are vendored.
+## Install
 
 ```bash
-git clone https://github.com/Pr1nted/dragoman
-cd dragoman
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
+pip install dragoman
 ```
 
-That gives you `build/dragoman` (the command line tool), `libdragoman.a`, and a
-shared `libdragoman.{so,dylib,dll}` for the bindings.
-
-Check it works:
+No compiler needed — the wheel carries the library. Other ways in, including
+release binaries and building from source, are on [Installing](Installing.md).
 
 ```bash
-ctest --test-dir build --output-on-failure
-./build/dragoman version
+dragoman version
 ```
 
 ## Convert a map

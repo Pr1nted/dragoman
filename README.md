@@ -9,6 +9,8 @@ whom two powers who shared no language could nonetheless sign something. This
 is that, for map files.
 
 ```bash
+pip install dragoman
+
 dragoman convert 1914.odmap base_maps/1914 --to gd5
 dragoman convert base_maps/GD4 gd4.odmap   --to odmap
 dragoman roundtrip 1914.odmap              # prove nothing was lost
@@ -126,7 +128,22 @@ even for conditions added to the game after this was written.
 
 Details and the full vocabulary: [docs/scripting.md](docs/scripting.md).
 
-## Building
+## Installing
+
+```bash
+pip install dragoman
+```
+
+The wheel carries the compiled library inside the package, so there is no
+compiler needed at install time and nothing to locate afterwards. You get both
+the Python API and a `dragoman` command.
+
+Prebuilt binaries for people who want nothing to do with Python are attached to
+each [release](https://github.com/Pr1nted/dragoman/releases). The full set of
+options — release archives, source builds, CMake `FetchContent` — is on
+[the Installing page](https://github.com/Pr1nted/dragoman/wiki/Installing).
+
+## Building from source
 
 Needs CMake 3.16 and a C++17 compiler. There are no external dependencies —
 miniz, stb and nlohmann/json are vendored, all MIT or public domain.
@@ -151,8 +168,8 @@ an accessor per field.
   [bindings/c/example.c](bindings/c/example.c).
 - **C++** — `#include <dragoman/dragoman.hpp>` for an RAII wrapper over the same
   ABI. See [bindings/cpp/example.cpp](bindings/cpp/example.cpp).
-- **Python** — `pip install ./bindings/python`. Pure ctypes, so no compiler is
-  needed at install time; it loads the shared library.
+- **Python** — `pip install dragoman`. Pure ctypes, and the wheel carries the
+  library, so no compiler is needed at install time.
 - **Anything else** — Rust, Go, C#, Java, Lua and WebAssembly all bind the same
   header. [docs/abi.md](docs/abi.md) documents the contract.
 
