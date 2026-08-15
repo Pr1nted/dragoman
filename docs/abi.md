@@ -63,6 +63,7 @@ dg_report_free(report);
 | `translate_scripts` | 1 | Translate scripts and scripted events. |
 | `strict` | 0 | Treat any warning as a failure. For CI. |
 | `reencode_images` | 0 | Re-encode images rather than passing original bytes through. |
+| `synthesise_ocean` | 1 | Cut the water into sea provinces when converting to GD5 from a game that draws none. Off, the sea renders black and no fleet can move. |
 
 ## Diagnostics
 

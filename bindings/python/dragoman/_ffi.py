@@ -75,6 +75,7 @@ class Options(ctypes.Structure):
         ("translate_scripts", ctypes.c_int),
         ("strict", ctypes.c_int),
         ("reencode_images", ctypes.c_int),
+        ("synthesise_ocean", ctypes.c_int),
     ]
 
 

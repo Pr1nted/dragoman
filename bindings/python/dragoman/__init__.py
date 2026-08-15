@@ -179,6 +179,7 @@ def _options(
     translate_scripts: bool = True,
     strict: bool = False,
     reencode_images: bool = False,
+    synthesise_ocean: bool = True,
 ) -> Options:
     opts = Options()
     _library().dg_options_defaults(ctypes.byref(opts))
@@ -187,6 +188,7 @@ def _options(
     opts.translate_scripts = int(translate_scripts)
     opts.strict = int(strict)
     opts.reencode_images = int(reencode_images)
+    opts.synthesise_ocean = int(synthesise_ocean)
     return opts
 
 

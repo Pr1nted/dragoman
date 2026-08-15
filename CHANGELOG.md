@@ -4,6 +4,46 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [semver](https://semver.org/), with a separate ABI version — see
 [docs/versioning.md](docs/versioning.md).
 
+## [0.2.0] — 2026-08-15
+
+Both changes here came from opening converted maps in the games themselves and
+looking at what was wrong.
+
+### Added
+
+- **Sea provinces are invented when the source game does not draw any.** Open
+  Doctrines leaves its oceans unpainted; GD5 can neither render nor sail across
+  what is not a province, so a converted map arrived with a black sea and no
+  fleet could move. The water is now cut into provinces — 743 of them on the
+  world map — by splitting each grid cell into its connected pieces, so the
+  Mediterranean and the Atlantic stay separate where one cell covers both. The
+  ids are recorded in the sidecar and deleted again on the way back, so the
+  round trip is unaffected. New `synthesise_ocean` option, default on.
+
+### Fixed
+
+- **Flags now render in GD5.** `flag_data` is not base64 of a PNG, which is
+  what this library was writing; it is base64 of *raw pixel bytes* at exactly
+  60x40, handed to `pygame.image.fromstring`. A PNG makes that raise,
+  `decode_b64_to_surf` swallows the exception, and every nation showed a blank
+  white rectangle. Flags are now decoded, resampled to 60x40 and written as raw
+  pixels, and the original full-size image is preserved in the sidecar so a
+  crossing does not permanently shrink it to GD5's icon size.
+- **One rule for "does this map draw its water"**, shared by both writers,
+  replacing two that disagreed. Deciding it by whether any province is marked
+  sea was wrong in both directions: Open Doctrines maps have a handful of
+  coastal provinces that sit mostly under the mask, so no ocean was ever
+  synthesised, while GD5 maps with lots of unpainted border did not get those
+  borders filled. It is now a pixel count, and the two populations are not
+  close — GD5's maps run 0.35 to 7.8 on the ratio, Open Doctrines' all sit at
+  0.0001.
+
+### Changed
+
+- **ABI version 2.** `dg_options` gained a field, which changes the struct's
+  size, so anything compiled against ABI 1 must be rebuilt. `SOVERSION` moves
+  with it.
+
 ## [0.1.0] — 2026-08-15
 
 First release. Converts maps between Open Doctrines `.odmap` archives and

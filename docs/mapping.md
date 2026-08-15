@@ -90,10 +90,22 @@ Open Doctrines does not put provinces in the water at all — its 1914 map has
 1247 provinces and every one is land — and moves ships by latitude and longitude
 over a land/sea mask.
 
-So an Open Doctrines map converted to GD5 arrives with no navigable water, and
-no amount of carrying can invent it: the source never drew those borders. This
-is reported as `gd5.nosea`, with the remedy (paint sea provinces in GD5's own
-editor). Ship positions are carried and return intact.
+So Dragoman draws them. When a map's water is not already made of provinces,
+converting to GD5 cuts the sea into provinces: each grid cell is split into its
+connected pieces first, so a fleet cannot cross an isthmus where one cell spans
+two seas, and pieces below a minimum size are folded into the largest piece of
+their own cell rather than becoming provinces nothing could usefully occupy.
+The world map gets 743 of them. They are owned by `Ocean`, which is added to
+the nation roster alongside — every GD5 map has that entry and no Open
+Doctrines map does.
+
+These provinces are an invention, not a translation, so their ids go into the
+sidecar and the crossing back deletes exactly them: an Open Doctrines map that
+has been to GD5 and returned has the provinces it started with. A sea province
+the map maker has since drawn in GD5's own editor is a real one and stays.
+`--no-ocean` turns the whole thing off, and then `gd5.nosea` warns instead.
+
+Ship positions are carried and return intact regardless.
 
 Open Doctrines places ships on an equirectangular full-globe projection —
 `lon = x/w*360 − 180`, `lat = 90 − y/h*180` — which is how a fleet's position
@@ -140,7 +152,7 @@ left inside the landmass — the same invariant Open Doctrines' own maps hold.
 | colour | `#rrggbb` | `[r, g, b]` | mapped |
 | treasury | `treasury` | `materials` | mapped |
 | leader, adjective | — | `leader_name`, `leader_title`, `adjective` | carried |
-| flag | a PNG path into the archive | base64 in `flag_data` | mapped (the filename is carried) |
+| flag | a PNG path into the archive | raw 60x40 pixels, base64, in `flag_data` | mapped, see below |
 | alliance / war | `relations.json` | `allied_with`, `at_war_with` | mapped |
 | non-aggression, guarantee | `relations.json` | — | carried |
 | research, faction, manpower, fuel | — | `research`, `faction`, … | carried |
@@ -158,6 +170,20 @@ world on the first simulated turn. Dragoman reports this as `od.treasury` rather
 than inventing a number and calling it a translation: the remedy is to set
 starting treasuries in Open Doctrines' map editor, and only a person who knows
 what the scenario is for can choose them.
+
+### A flag is not a file in GD5
+
+`flag_data` is base64 of **raw pixel bytes at exactly 60x40**, handed straight
+to `pygame.image.fromstring` — RGBA when the payload is 9600 bytes, RGB when it
+is 7200. It is not a PNG. Give it base64 of one and `fromstring` raises,
+`decode_b64_to_surf` swallows the exception, and the nation is drawn as a blank
+white rectangle.
+
+So an Open Doctrines flag is decoded, resampled to 60x40 and written as raw
+pixels. That is lossy in one direction — 60x40 is smaller than the flags Open
+Doctrines ships — so the original image is kept in the sidecar and preferred on
+the way home; without it, every crossing would permanently shrink a nation's
+flag to GD5's icon size.
 
 ### A nation's identity is not its name
 

@@ -335,6 +335,45 @@ std::set<uint32_t> computeCoastal(const std::map<uint32_t, std::set<uint32_t>>& 
     return coastal;
 }
 
+Image resizeImage(const Image& src, int w, int h) {
+    Image out;
+    if (src.empty() || w <= 0 || h <= 0) return out;
+    out.width = w;
+    out.height = h;
+    out.channels = 4;
+    out.rgba.assign(static_cast<size_t>(w) * h * 4, 0);
+
+    /* Bilinear on the source's pixel centres. A flag is being shrunk from a
+     * few hundred pixels to sixty, so the alternative -- nearest neighbour --
+     * would drop whole stripes off a tricolour. */
+    const double sx = static_cast<double>(src.width) / w;
+    const double sy = static_cast<double>(src.height) / h;
+    for (int y = 0; y < h; ++y) {
+        const double fy = std::min(std::max((y + 0.5) * sy - 0.5, 0.0), src.height - 1.0);
+        const int y0 = static_cast<int>(fy);
+        const int y1 = std::min(y0 + 1, src.height - 1);
+        const double wy = fy - y0;
+        for (int x = 0; x < w; ++x) {
+            const double fx = std::min(std::max((x + 0.5) * sx - 0.5, 0.0), src.width - 1.0);
+            const int x0 = static_cast<int>(fx);
+            const int x1 = std::min(x0 + 1, src.width - 1);
+            const double wx = fx - x0;
+
+            for (int ch = 0; ch < 4; ++ch) {
+                const double a = src.rgba[(static_cast<size_t>(y0) * src.width + x0) * 4 + ch];
+                const double b = src.rgba[(static_cast<size_t>(y0) * src.width + x1) * 4 + ch];
+                const double c = src.rgba[(static_cast<size_t>(y1) * src.width + x0) * 4 + ch];
+                const double d = src.rgba[(static_cast<size_t>(y1) * src.width + x1) * 4 + ch];
+                const double top = a + (b - a) * wx;
+                const double bottom = c + (d - c) * wx;
+                out.rgba[(static_cast<size_t>(y) * w + x) * 4 + ch] =
+                    static_cast<uint8_t>(std::lround(top + (bottom - top) * wy));
+            }
+        }
+    }
+    return out;
+}
+
 void lonLatToPixel(double lon, double lat, int w, int h, int& x, int& y) {
     x = static_cast<int>(std::lround((lon + 180.0) / 360.0 * w));
     y = static_cast<int>(std::lround((90.0 - lat) / 180.0 * h));

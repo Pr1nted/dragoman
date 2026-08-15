@@ -37,13 +37,20 @@ Verified against Open Doctrines and against
 [GitGetGot415/Greater-Diplomacy-5](https://github.com/GitGetGot415/Greater-Diplomacy-5).
 Reproduce with `python3 tools/conformance.py <directory of maps>`.
 
-Converted maps have also been loaded by **both games themselves**, not only by
-this library: an Open Doctrines map converted to GD5 loads through GD5's own
-`load_map_assets` with complete, symmetric adjacency and every province centre
-inside its own province; a GD5 map converted to Open Doctrines loads and plays
-five AI turns under `OpenDoctrines --simulate`. Two caveats came out of doing
-that, and both are reported by the converter rather than hidden — see
-`gd5.nosea` and `od.treasury` in [docs/mapping.md](docs/mapping.md).
+Converted maps have also been **played in both games**, not merely loaded by
+this library. Open Doctrines' world map converted to GD5 boots through GD5's
+own `Controller` and `Map` state with all 23 screens, its flags drawn, its
+oceans navigable and every province centre inside its own province; a GD5 map
+converted to Open Doctrines plays five AI turns under `OpenDoctrines
+--simulate`. Nearly everything this library gets right, it gets right because
+somebody opened the result in the game and looked at it — the flag encoding,
+the ocean, the political layer's colour key and the province-border fill were
+all found that way.
+
+One thing crossing to Open Doctrines still needs a human: GD5 starts its
+nations with an empty stockpile and Open Doctrines expects a starting
+endowment, so a converted map bankrupts its world on the first turn unless
+treasuries are set. Reported as `od.treasury` rather than guessed at.
 
 ## What "lossless" means here
 
@@ -83,10 +90,12 @@ packs with miniz. Every file *inside* is preserved exactly.
 | Province identity | preserved exactly — the rasters differ only by swapping red and blue |||
 | Owner, name, claims | ✅ | ✅ |
 | Cores | — | ✅ (carried) |
+| Sea provinces | — (**synthesised** for GD5) | ✅ |
 | Population, ports, fortification | ✅ | — (carried) |
 | Minorities, political compass, policies | ✅ | — (carried) |
 | Terrain, adjacency, province centres | — (**derived** from the raster) | ✅ |
 | Units, buildings, research, factions | — (armies carried) | ✅ |
+| Flags | a PNG in the archive | raw 60x40 pixels, base64 |
 | Relations | ally, non-aggression, guarantee | war and alliance only (rest carried) |
 | Scripts | imperative `#OD/MapEngine/1` | declarative scripted events |
 
@@ -148,7 +157,7 @@ an accessor per field.
 
 Two numbers that move for different reasons:
 
-- **Library version** (`VERSION`, semver) — the release. Currently `0.1.0`.
+- **Library version** (`VERSION`, semver) — the release. Currently `0.2.0`.
 - **ABI version** (`DRAGOMAN_ABI_VERSION`) — bumped only when an existing symbol
   changes meaning, so a binding can refuse to load a library it cannot speak to
   without parsing semver.

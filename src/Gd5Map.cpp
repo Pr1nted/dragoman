@@ -39,6 +39,57 @@ constexpr double kMenPerHealth = 1000.0;
 constexpr uint32_t kChromaKey = 0xFF00FF;
 constexpr uint32_t kChromaNudged = 0xFE00FF;
 
+/* data/constants.py: FLAG_SIZE. GD5 does not store a flag as an image file --
+ * `flag_data` is base64 of *raw pixel bytes* at exactly this size, handed
+ * straight to pygame.image.fromstring, RGBA when the payload is w*h*4 bytes
+ * and RGB when it is w*h*3. Give it base64 of a PNG instead and fromstring
+ * raises, decode_b64_to_surf swallows the exception, and the nation gets a
+ * blank white rectangle -- which is exactly what every converted map showed
+ * until this was worked out. */
+constexpr int kFlagWidth = 60;
+constexpr int kFlagHeight = 40;
+
+/* An Open Doctrines flag PNG, in whatever size it happens to be, as the raw
+ * RGBA bytes GD5 expects. */
+std::string encodeFlagForGd5(const std::vector<uint8_t>& png) {
+    Image img;
+    if (!decodePng(png, img) || img.empty()) return std::string();
+    const Image scaled = (img.width == kFlagWidth && img.height == kFlagHeight)
+                             ? img
+                             : resizeImage(img, kFlagWidth, kFlagHeight);
+    return base64Encode(scaled.rgba);
+}
+
+/* And back: raw pixels at 60x40 into a PNG Open Doctrines can put in its
+ * archive. */
+std::vector<uint8_t> decodeFlagFromGd5(const std::string& b64) {
+    const std::vector<uint8_t> raw = base64Decode(b64);
+    const size_t rgba = static_cast<size_t>(kFlagWidth) * kFlagHeight * 4;
+    const size_t rgb = static_cast<size_t>(kFlagWidth) * kFlagHeight * 3;
+
+    Image img;
+    img.width = kFlagWidth;
+    img.height = kFlagHeight;
+    img.channels = 4;
+    if (raw.size() == rgba) {
+        img.rgba = raw;
+    } else if (raw.size() == rgb) {
+        img.rgba.resize(rgba);
+        for (size_t p = 0; p < static_cast<size_t>(kFlagWidth) * kFlagHeight; ++p) {
+            img.rgba[p * 4 + 0] = raw[p * 3 + 0];
+            img.rgba[p * 4 + 1] = raw[p * 3 + 1];
+            img.rgba[p * 4 + 2] = raw[p * 3 + 2];
+            img.rgba[p * 4 + 3] = 255;
+        }
+    } else {
+        /* Some other size, or a payload this library does not recognise. It is
+         * carried verbatim in `extra` either way, so nothing is lost by
+         * declining to guess at it here. */
+        return std::vector<uint8_t>();
+    }
+    return encodePng(img);
+}
+
 /* The palette map_tools/automatic_map_painter.py reads a hand-painted terrain
  * layer through. Writing exactly these values means a layer we generate can be
  * re-imported by GD5's own painter and come back with the same terrains. */
@@ -75,6 +126,110 @@ Json readJsonFile(const std::string& path, Report& report) {
         report.warn("gd5.badjson", path + " is not valid JSON and was skipped: " + ex.what());
         return Json();
     }
+}
+
+/* Give GD5 an ocean to draw and to sail on.
+ *
+ * Open Doctrines does not divide water into provinces -- every water pixel is
+ * simply unpainted -- so a map crossing to GD5 arrives with nothing in the
+ * sea: its renderer paints unpainted pixels black, and no fleet can move,
+ * because movement is province to province.
+ *
+ * The water is therefore cut into provinces here. A plain grid would let a
+ * fleet cross an isthmus wherever one cell happened to span two seas, so each
+ * cell is split into its connected pieces first and only then made into
+ * provinces; the Mediterranean and the Atlantic stay separate even where a
+ * single cell covers both. Slivers below the minimum are folded into the
+ * largest piece of their own cell rather than becoming provinces a unit could
+ * never usefully occupy.
+ *
+ * These provinces are an invention, not a translation, so their ids are
+ * recorded in the sidecar and the crossing back deletes them again -- an Open
+ * Doctrines map that has been to GD5 and returned has exactly the provinces it
+ * started with.
+ */
+struct SynthesisedOcean {
+    std::vector<int64_t> ids;
+    long                 pixels = 0;
+};
+
+SynthesisedOcean synthesiseOcean(std::vector<uint32_t>& ids, int w, int h,
+                                 std::vector<Province>& provinces, int cell, long min_pixels) {
+    SynthesisedOcean made;
+    if (w <= 0 || h <= 0) return made;
+
+    int64_t nextId = 1;
+    for (const auto& p : provinces) nextId = std::max(nextId, p.id + 1);
+
+    const size_t n = ids.size();
+    std::vector<uint32_t> assigned(n, 0);
+    std::vector<size_t> stack, component;
+
+    /* Cell by cell, so that a piece of water never spans more of the map than
+     * one cell however large the sea it belongs to. */
+    for (int cy = 0; cy < h; cy += cell) {
+        for (int cx = 0; cx < w; cx += cell) {
+            const int x1 = std::min(cx + cell, w), y1 = std::min(cy + cell, h);
+            std::vector<std::vector<size_t>> pieces;
+
+            for (int y = cy; y < y1; ++y) {
+                for (int x = cx; x < x1; ++x) {
+                    const size_t start = static_cast<size_t>(y) * w + x;
+                    if (ids[start] != 0 || assigned[start]) continue;
+                    component.clear();
+                    stack.assign(1, start);
+                    assigned[start] = 1;
+                    while (!stack.empty()) {
+                        const size_t i = stack.back();
+                        stack.pop_back();
+                        component.push_back(i);
+                        const int px = static_cast<int>(i % static_cast<size_t>(w));
+                        const int py = static_cast<int>(i / static_cast<size_t>(w));
+                        const int dx[4] = {1, -1, 0, 0}, dy[4] = {0, 0, 1, -1};
+                        for (int d = 0; d < 4; ++d) {
+                            const int nx = px + dx[d], ny = py + dy[d];
+                            if (nx < cx || nx >= x1 || ny < cy || ny >= y1) continue;
+                            const size_t j = static_cast<size_t>(ny) * w + nx;
+                            if (ids[j] != 0 || assigned[j]) continue;
+                            assigned[j] = 1;
+                            stack.push_back(j);
+                        }
+                    }
+                    pieces.push_back(component);
+                }
+            }
+            if (pieces.empty()) continue;
+
+            size_t largest = 0;
+            for (size_t i = 1; i < pieces.size(); ++i) {
+                if (pieces[i].size() > pieces[largest].size()) largest = i;
+            }
+
+            for (size_t i = 0; i < pieces.size(); ++i) {
+                const bool tiny = static_cast<long>(pieces[i].size()) < min_pixels
+                                  && i != largest;
+                if (tiny) continue;  /* folded in below */
+                const int64_t id = nextId++;
+                for (size_t px : pieces[i]) ids[px] = static_cast<uint32_t>(id);
+
+                Province prov;
+                prov.id = id;
+                prov.is_sea = true;
+                prov.terrain = "ocean";  /* refined to coastal_sea once adjacency is known */
+                provinces.push_back(prov);
+                made.ids.push_back(id);
+                made.pixels += static_cast<long>(pieces[i].size());
+            }
+            /* The slivers, given to the piece that dominates their cell. */
+            const uint32_t host = static_cast<uint32_t>(ids[pieces[largest].front()]);
+            for (size_t i = 0; i < pieces.size(); ++i) {
+                if (i == largest || static_cast<long>(pieces[i].size()) >= min_pixels) continue;
+                for (size_t px : pieces[i]) ids[px] = host;
+                made.pixels += static_cast<long>(pieces[i].size());
+            }
+        }
+    }
+    return made;
 }
 
 }  // namespace
@@ -178,8 +333,8 @@ bool readGd5Map(const std::string& dir, const Options& opt, World& world, Report
 
             const std::string flag = nd.value("flag_data", std::string("DEFAULT"));
             if (!flag.empty() && flag != "DEFAULT") {
-                n.flag_bytes = base64Decode(flag);
-                n.flag_name = "flags/" + n.key + ".png";
+                n.flag_bytes = decodeFlagFromGd5(flag);
+                if (!n.flag_bytes.empty()) n.flag_name = "flags/" + n.key + ".png";
             }
 
             if (nd.contains("at_war_with") && nd["at_war_with"].is_array()) {
@@ -377,6 +532,43 @@ bool readGd5Map(const std::string& dir, const Options& opt, World& world, Report
             world.sidecar_blobs["gd5/terrain.png"] = terrainBytes;
         }
         readSidecarFrom(dir, world);
+
+        /* The sea provinces this library invented on the way out are taken
+         * out again here, along with the Ocean nation that owns them and the
+         * pixels they were painted into, so that a map which went to GD5 and
+         * came back has exactly the provinces it started with. Only the ids
+         * recorded in the sidecar are touched: a sea province the map maker
+         * has since drawn in GD5's own editor is a real one and stays. */
+        const auto gd5Side = world.sidecar.find("gd5");
+        if (gd5Side != world.sidecar.end() && gd5Side->contains(kSyntheticOceanKey)) {
+            const Json& record = (*gd5Side)[kSyntheticOceanKey];
+            std::set<int64_t> invented;
+            if (record.contains("provinces") && record["provinces"].is_array()) {
+                for (const auto& id : record["provinces"]) {
+                    if (id.is_number_integer()) invented.insert(id.get<int64_t>());
+                }
+            }
+            if (!invented.empty()) {
+                const size_t before = world.provinces.size();
+                world.provinces.erase(
+                    std::remove_if(world.provinces.begin(), world.provinces.end(),
+                                   [&invented](const Province& p) { return invented.count(p.id) != 0; }),
+                    world.provinces.end());
+                for (auto& id : world.raster) {
+                    if (invented.count(static_cast<int64_t>(id))) id = 0;
+                }
+                const std::string oceanName = record.value("nation", std::string("Ocean"));
+                world.nations.erase(
+                    std::remove_if(world.nations.begin(), world.nations.end(),
+                                   [&oceanName](const Nation& n) { return n.name == oceanName; }),
+                    world.nations.end());
+                report.info("gd5.ocean",
+                            "removed the " + std::to_string(before - world.provinces.size())
+                                + " sea provinces this library invented when the map crossed to "
+                                  "GD5; Open Doctrines leaves its water unprovinced");
+            }
+        }
+
         restoreUnrepresentable(world, report);
     }
 
@@ -419,17 +611,39 @@ bool writeGd5Map(const std::string& dir, const World& world, const Options& opt,
         return it != keyToName.end() ? it->second : std::string();
     };
 
+    /* ---- the sea, where the source game did not draw one ---- */
+    std::vector<Province> localProvinces;
+    std::vector<uint32_t> localRaster;
+    SynthesisedOcean ocean;
+
+    /* Only a map that does not already draw its water gets an ocean invented
+     * for it -- see waterIsProvinced() for why this is a count rather than a
+     * check that some province is marked sea. Checking merely that one exists
+     * said "already provinced" for every Open Doctrines map, because a handful
+     * of their coastal provinces sit mostly under the mask, and no ocean was
+     * ever drawn. */
+    if (opt.synthesise_ocean && !world.provinces.empty()
+        && !waterIsProvinced(world.raster, world.provinces)) {
+        localProvinces = world.provinces;
+        localRaster = world.raster;
+        ocean = synthesiseOcean(localRaster, world.width, world.height, localProvinces,
+                                /*cell=*/256, /*min_pixels=*/48);
+    }
+    const bool synthesised = !ocean.ids.empty();
+    const std::vector<Province>& provinces = synthesised ? localProvinces : world.provinces;
+    const std::vector<uint32_t>& raster = synthesised ? localRaster : world.raster;
+
     /* ---- geometry GD5 needs and Open Doctrines never stored ---- */
     std::map<uint32_t, std::set<uint32_t>> adjacency;
     std::map<uint32_t, std::pair<int, int>> centers;
     bool derived = false;
     bool needsGeometry = false;
-    for (const auto& p : world.provinces) {
+    for (const auto& p : provinces) {
         if (!p.has_neighbors || !p.has_center) { needsGeometry = true; break; }
     }
-    if (needsGeometry && opt.derive_geometry && !world.raster.empty()) {
-        adjacency = computeAdjacency(world.raster, world.width, world.height, /*wrap_x=*/true);
-        centers = computeCenters(world.raster, world.width, world.height);
+    if (needsGeometry && opt.derive_geometry && !raster.empty()) {
+        adjacency = computeAdjacency(raster, world.width, world.height, /*wrap_x=*/true);
+        centers = computeCenters(raster, world.width, world.height);
         derived = true;
         report.info("gd5.derived",
                     "computed province adjacency and centres from the province raster, because "
@@ -441,27 +655,46 @@ bool writeGd5Map(const std::string& dir, const World& world, const Options& opt,
     }
 
     std::set<uint32_t> seaIds;
-    for (const auto& p : world.provinces) {
+    for (const auto& p : provinces) {
         if (p.is_sea) seaIds.insert(static_cast<uint32_t>(p.id));
     }
 
+    const std::map<uint32_t, std::set<uint32_t>> fullAdjacency =
+        derived ? adjacency : computeAdjacency(raster, world.width, world.height, true);
+    const std::set<uint32_t> coastal = computeCoastal(fullAdjacency, seaIds);
+
     /* The two games disagree about what the sea is. GD5 divides it into
      * provinces, gives them to a nation called Ocean and sails fleets between
-     * them. Open Doctrines does not put provinces in the water at all -- its
-     * 1914 map has 1247 of them and every one is land -- and moves ships by
-     * latitude and longitude over a land/sea mask instead. A map crossing this
-     * way therefore arrives with no water to sail on, and no amount of
-     * carrying can invent it, because the source never drew those borders. */
-    if (seaIds.empty() && !world.provinces.empty()) {
+     * them; Open Doctrines does not put provinces in the water at all and
+     * moves ships by latitude and longitude over a land/sea mask instead. */
+    if (synthesised) {
+        /* A sea province that touches land is coastal water, which is both the
+         * terrain GD5 shades differently and the one its landing rules read. */
+        std::set<uint32_t> land;
+        for (const auto& p : provinces) {
+            if (!p.is_sea) land.insert(static_cast<uint32_t>(p.id));
+        }
+        for (auto& p : localProvinces) {
+            if (!p.is_sea) continue;
+            const auto neighbours = fullAdjacency.find(static_cast<uint32_t>(p.id));
+            if (neighbours == fullAdjacency.end()) continue;
+            for (uint32_t other : neighbours->second) {
+                if (land.count(other)) { p.terrain = "coastal_sea"; break; }
+            }
+        }
+        report.info("gd5.ocean",
+                    "divided the water into " + std::to_string(ocean.ids.size())
+                        + " sea provinces covering " + std::to_string(ocean.pixels)
+                        + " pixels, because Open Doctrines leaves its oceans unpainted and GD5 "
+                          "cannot draw or sail across what is not a province. They are recorded "
+                          "in the sidecar and removed again on the way back.");
+    } else if (seaIds.empty() && !provinces.empty()) {
         report.warn("gd5.nosea",
                     "this map has no sea provinces, because Open Doctrines does not divide water "
-                    "into any. GD5 will load it, but no fleet can move: to sail it, paint sea "
-                    "provinces in GD5's map editor. Ship positions are preserved in the sidecar "
-                    "and return intact.");
+                    "into any, and ocean synthesis is switched off. GD5 will load it, but no fleet "
+                    "can move and the sea will render black. Ship positions are preserved in the "
+                    "sidecar and return intact.");
     }
-    const std::set<uint32_t> coastal = computeCoastal(
-        derived ? adjacency : computeAdjacency(world.raster, world.width, world.height, true),
-        seaIds);
 
     /* ---- map_data.json and the scenario overlay ---- */
     Json mapData = Json::object();
@@ -470,7 +703,7 @@ bool writeGd5Map(const std::string& dir, const World& world, const Options& opt,
     std::map<uint32_t, uint32_t> coreColor;
     std::vector<uint32_t> terrainOfPixel;
 
-    for (const auto& p : world.provinces) {
+    for (const auto& p : provinces) {
         const std::string key = provinceKey(p.id);
         Json j = Json::object();
         j["id"] = p.id;
@@ -683,8 +916,17 @@ bool writeGd5Map(const std::string& dir, const World& world, const Options& opt,
         if (!nd.contains("relations")) nd["relations"] = Json::object();
         if (!nd.contains("portrait_data")) nd["portrait_data"] = "DEFAULT";
 
-        nd["flag_data"] = n.flag_bytes.empty() ? Json("DEFAULT")
-                                               : Json(base64Encode(n.flag_bytes));
+        if (n.flag_bytes.empty()) {
+            if (!nd.contains("flag_data")) nd["flag_data"] = "DEFAULT";
+        } else {
+            const std::string encoded = encodeFlagForGd5(n.flag_bytes);
+            nd["flag_data"] = encoded.empty() ? Json("DEFAULT") : Json(encoded);
+            if (encoded.empty()) {
+                report.warn("gd5.flag",
+                            "the flag for " + n.name
+                                + " could not be decoded, so GD5 will draw its default one");
+            }
+        }
 
         Json atWar = Json::array(), allied = Json::array();
         for (const auto& kv : n.relations) {
@@ -719,17 +961,41 @@ bool writeGd5Map(const std::string& dir, const World& world, const Options& opt,
                     "written into the map; they are preserved in the sidecar and return intact");
     }
 
+    /* The sea provinces invented above are owned by "Ocean", which every GD5
+     * map has as a nation_data entry and an Open Doctrines map never does. It
+     * is added here rather than to the model, because it is part of the same
+     * invention: the sidecar records it and the crossing back removes it. */
+    if (synthesised && !nationData.contains("Ocean")) {
+        nationData["Ocean"] = Json{{"name", "Ocean"},
+                                   {"adjective", ""},
+                                   {"color", Json::array({10, 20, 40})},
+                                   {"leader_name", ""},
+                                   {"leader_title", ""},
+                                   {"is_playable", false},
+                                   {"manpower", 0},
+                                   {"materials", 0},
+                                   {"fuel", 0},
+                                   {"at_war_with", Json::array()},
+                                   {"allied_with", Json::array()},
+                                   {"claims", Json::array()},
+                                   {"relations", Json::object()},
+                                   {"pending_diplomacy", Json::object()},
+                                   {"flag_data", "DEFAULT"},
+                                   {"portrait_data", "DEFAULT"},
+                                   {"scripted_events", Json::array()}};
+    }
+
     meta["nation_data"] = nationData;
     meta["provinces"] = overlay;
 
     /* ---- the layers ---- */
-    const Image idImg = rasterToGd5(world.raster, world.width, world.height);
+    const Image idImg = rasterToGd5(raster, world.width, world.height);
     writeFile(joinPath(dir, "id_map.png"), encodePng(idImg));
     writeFile(joinPath(dir, "political.png"),
-              encodePng(politicalImage(world.raster, world.width, world.height, ownerColor,
+              encodePng(politicalImage(raster, world.width, world.height, ownerColor,
                                        kChromaKey)));
     writeFile(joinPath(dir, "cores.png"),
-              encodePng(politicalImage(world.raster, world.width, world.height, coreColor,
+              encodePng(politicalImage(raster, world.width, world.height, coreColor,
                                        kChromaKey)));
 
     const auto carriedTerrain = world.sidecar_blobs.find("gd5/terrain.png");
@@ -737,7 +1003,7 @@ bool writeGd5Map(const std::string& dir, const World& world, const Options& opt,
         writeFile(joinPath(dir, "terrain.png"), carriedTerrain->second);
     } else {
         std::map<uint32_t, uint32_t> terrainColorOf;
-        for (const auto& p : world.provinces) {
+        for (const auto& p : provinces) {
             std::string t = p.terrain;
             if (t.empty()) {
                 t = defaultTerrainFor(p.is_sea, coastal.count(static_cast<uint32_t>(p.id)) != 0);
@@ -745,7 +1011,7 @@ bool writeGd5Map(const std::string& dir, const World& world, const Options& opt,
             terrainColorOf[static_cast<uint32_t>(p.id)] = terrainColor(t);
         }
         writeFile(joinPath(dir, "terrain.png"),
-                  encodePng(politicalImage(world.raster, world.width, world.height, terrainColorOf,
+                  encodePng(politicalImage(raster, world.width, world.height, terrainColorOf,
                                            terrainColor("ocean"))));
     }
 
@@ -759,9 +1025,16 @@ bool writeGd5Map(const std::string& dir, const World& world, const Options& opt,
     }
     writeFile(joinPath(dir, "history.json"), history.dump());
 
-    if (opt.carry_sidecar) writeSidecarInto(dir, world);
+    if (opt.carry_sidecar) {
+        Json extra = Json::object();
+        if (synthesised) {
+            extra["gd5"][kSyntheticOceanKey] = Json{{"provinces", ocean.ids},
+                                                    {"nation", "Ocean"}};
+        }
+        writeSidecarInto(dir, world, extra);
+    }
 
-    report.info("gd5.write", "wrote " + std::to_string(world.provinces.size()) + " provinces to "
+    report.info("gd5.write", "wrote " + std::to_string(provinces.size()) + " provinces to "
                                  + dir);
     if (opt.strict && report.hasWarnings()) {
         setLastError("strict mode: the translation produced warnings");

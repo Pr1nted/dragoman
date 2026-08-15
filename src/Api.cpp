@@ -34,6 +34,7 @@ Options fromC(const dg_options* o) {
     opt.translate_scripts = o->translate_scripts != 0;
     opt.strict = o->strict != 0;
     opt.reencode_images = o->reencode_images != 0;
+    opt.synthesise_ocean = o->synthesise_ocean != 0;
     return opt;
 }
 
@@ -205,6 +206,7 @@ void dg_options_defaults(dg_options* out) {
     out->translate_scripts = 1;
     out->strict = 0;
     out->reencode_images = 0;
+    out->synthesise_ocean = 1;
 }
 
 int dg_report_count(const dg_report* r) {

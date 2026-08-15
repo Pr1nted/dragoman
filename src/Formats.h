@@ -16,7 +16,28 @@ struct Options {
     bool translate_scripts = true;
     bool strict           = false;
     bool reencode_images  = false;
+    bool synthesise_ocean = true;
 };
+
+/* Where the synthesised sea provinces are recorded, so the crossing back can
+ * delete exactly the ones this library invented and nothing else. */
+extern const char* kSyntheticOceanKey;
+
+/* Does this map draw its water as provinces?
+ *
+ * The single question both writers turn on, and they must answer it the same
+ * way or one will fill in borders the other has just invented an ocean over.
+ * Decided by comparing how much of the map is covered by sea provinces against
+ * how much is left unpainted, because neither format states it outright.
+ *
+ * The two populations are not close. Greater Diplomacy 5's maps run from 0.35
+ * to 7.8 on that ratio; Open Doctrines' shipped maps all sit at 0.0001 -- a
+ * handful of coastal provinces whose pixels happen to fall mostly under the
+ * land/sea mask, some three thousand pixels against twenty-two million blank.
+ * Anything between those is a map this library has not seen.
+ */
+bool waterIsProvinced(const std::vector<uint32_t>& raster,
+                      const std::vector<Province>& provinces);
 
 bool readOdMap(const std::string& path, const Options& opt, World& world, Report& report);
 bool writeOdMap(const std::string& path, const World& world, const Options& opt, Report& report);
@@ -78,7 +99,8 @@ void eventsFromGd5(const Json& raw, const std::string& owner, std::vector<Event>
 
 void writeSidecarInto(Zip& zip, const World& world,
                       const std::map<std::string, std::vector<uint8_t>>& extra_blobs = {});
-void writeSidecarInto(const std::string& dir, const World& world);
+void writeSidecarInto(const std::string& dir, const World& world,
+                      const Json& extra_data = Json::object());
 /* The name -> ISO pairings a previous crossing settled on, read on their own
  * and before anything else. The GD5 reader needs them while it is still
  * deciding what to call each nation: by the time the whole sidecar is applied

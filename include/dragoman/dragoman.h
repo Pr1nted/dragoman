@@ -52,10 +52,10 @@ extern "C" {
  * meaning, so a binding can refuse to load a library it cannot speak to
  * without having to parse a version string. */
 #define DRAGOMAN_VERSION_MAJOR 0
-#define DRAGOMAN_VERSION_MINOR 1
+#define DRAGOMAN_VERSION_MINOR 2
 #define DRAGOMAN_VERSION_PATCH 0
-#define DRAGOMAN_VERSION_STRING "0.1.0"
-#define DRAGOMAN_ABI_VERSION 1
+#define DRAGOMAN_VERSION_STRING "0.2.0"
+#define DRAGOMAN_ABI_VERSION 2
 
 DG_API const char* dg_version_string(void);
 DG_API int         dg_version_major(void);
@@ -106,6 +106,14 @@ typedef struct dg_options {
      * useful for shrinking a map; it makes round trips non-identical at the
      * byte level. Default 0. */
     int reencode_images;
+
+    /* Cut the water into sea provinces when converting to GD5 from a game that
+     * does not draw any. Open Doctrines leaves its oceans unpainted, and GD5
+     * can neither render nor sail across what is not a province, so without
+     * this the sea arrives black and no fleet can move. The invented provinces
+     * are recorded in the sidecar and removed again on the way back, so the
+     * round trip is unaffected either way. Default 1. */
+    int synthesise_ocean;
 } dg_options;
 
 DG_API void dg_options_defaults(dg_options* out);

@@ -29,6 +29,9 @@ void usage() {
         "                    (smaller output, and the round trip stops being lossless)\n"
         "  --no-geometry     do not derive province adjacency and centres\n"
         "  --no-scripts      do not translate scripts or scripted events\n"
+        "  --no-ocean        do not invent sea provinces for a game whose maps\n"
+        "                    leave their water unpainted (GD5 then renders it black\n"
+        "                    and no fleet can move)\n"
         "  --reencode        re-encode images instead of passing them through\n"
         "  --strict          treat any warning as a failure\n"
         "  --quiet           print only warnings and errors\n",
@@ -87,6 +90,7 @@ int main(int argc, char** argv) {
         else if (arg == "--no-sidecar") { opts.carry_sidecar = 0; }
         else if (arg == "--no-geometry") { opts.derive_geometry = 0; }
         else if (arg == "--no-scripts") { opts.translate_scripts = 0; }
+        else if (arg == "--no-ocean") { opts.synthesise_ocean = 0; }
         else if (arg == "--reencode") { opts.reencode_images = 1; }
         else if (arg == "--strict") { opts.strict = 1; }
         else if (arg == "--quiet") { quiet = true; }

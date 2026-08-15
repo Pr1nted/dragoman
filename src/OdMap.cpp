@@ -435,7 +435,13 @@ bool writeOdMap(const std::string& path, const World& world, const Options& opt,
         if (!flagName.empty()) {
             c["flag_actual"] = Json{{"image", flagName}};
             c["flag_censored"] = Json{{"image", flagName}};
-            if (!n.flag_bytes.empty()) zip.put(flagName, n.flag_bytes);
+            /* Only when the archive is not already carrying the original. A
+             * flag that has been to GD5 and back is 60x40, and writing that
+             * over the image it was made from would lose the full-size one
+             * for good. */
+            if (!n.flag_bytes.empty() && !world.sidecar_blobs.count("od/" + flagName)) {
+                zip.put(flagName, n.flag_bytes);
+            }
         }
         c["treasury"] = n.treasury;
 
@@ -583,21 +589,13 @@ bool writeOdMap(const std::string& path, const World& world, const Options& opt,
     std::vector<uint32_t> raster = world.raster;
     std::map<std::string, std::vector<uint8_t>> extraBlobs;
 
-    /* Which of the two meanings this raster's blank pixels carry is decided by
-     * counting, not by guessing at the source: if most of the map's water is
-     * covered by sea provinces then the game that drew it paints its oceans,
-     * and what is left blank is border. If the water is mostly blank then the
-     * blanks *are* the water and filling them would turn the Atlantic into
-     * land -- which is exactly what an earlier version of this did to every
-     * Open Doctrines map that crossed. */
-    long seaPixels = 0, gapPixels = 0;
-    for (uint32_t id : world.raster) {
-        if (id == 0) ++gapPixels;
-        else if (seaIds.count(id)) ++seaPixels;
-    }
-    const bool provincedWater = seaPixels > 0 && seaPixels * 2 >= gapPixels;
-
-    if (provincedWater) {
+    /* Which of the two meanings this raster's blank pixels carry -- border, or
+     * open water -- is the same question the GD5 writer asks before inventing
+     * an ocean, and it is asked through the same function so the two can never
+     * disagree. Filling a map whose blanks really are the sea would turn the
+     * Atlantic into land, which is exactly what an earlier version of this did
+     * to every Open Doctrines map that crossed. */
+    if (waterIsProvinced(world.raster, world.provinces)) {
         std::vector<uint8_t> mask;
         std::vector<uint32_t> filled = fillGaps(world.raster, world.width, world.height,
                                                 /*wrap_x=*/true, &mask);

@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <set>
 
 #include <dragoman/dragoman.h>
 
@@ -229,8 +230,32 @@ void writeSidecarInto(Zip& zip, const World& world,
     }
 }
 
-void writeSidecarInto(const std::string& dir, const World& world) {
-    const Json doc = buildSidecarDoc(world);
+const char* kSyntheticOceanKey = "synthetic_ocean";
+
+bool waterIsProvinced(const std::vector<uint32_t>& raster,
+                      const std::vector<Province>& provinces) {
+    std::set<uint32_t> sea;
+    for (const auto& p : provinces) {
+        if (p.is_sea) sea.insert(static_cast<uint32_t>(p.id));
+    }
+    long seaPixels = 0, blankPixels = 0;
+    for (uint32_t id : raster) {
+        if (id == 0) ++blankPixels;
+        else if (sea.count(id)) ++seaPixels;
+    }
+    if (blankPixels == 0) return true;   /* nothing unpainted: nothing to decide */
+    return seaPixels * 10 >= blankPixels;
+}
+
+void writeSidecarInto(const std::string& dir, const World& world, const Json& extra_data) {
+    Json doc = buildSidecarDoc(world);
+    /* Merged into the carried data rather than kept beside it, so that reading
+     * the sidecar back puts it exactly where the reader looks for it. */
+    for (auto it = extra_data.begin(); it != extra_data.end(); ++it) {
+        for (auto f = it.value().begin(); f != it.value().end(); ++f) {
+            doc["data"][it.key()][f.key()] = f.value();
+        }
+    }
     const std::string root = joinPath(dir, kSidecarDir);
     makeDirectories(root);
     writeFile(joinPath(root, "sidecar.json"), doc.dump(1, ' '));
@@ -400,6 +425,15 @@ void restoreUnrepresentable(World& world, Report& report) {
              * was called, so the name has to come from here or every crossing
              * renames flags/GER_EMPIRE.png to flags/GER.png. */
             if (!was->flag_name.empty()) n.flag_name = was->flag_name;
+            /* The flag GD5 handed back is 60x40 raw pixels, because that is
+             * the only shape it stores one in. The original image is carried
+             * beside the map, so where it is still there it wins -- otherwise
+             * every crossing would permanently shrink a nation's flag to
+             * GD5's icon size. */
+            const auto original = world.sidecar_blobs.find("od/" + n.flag_name);
+            if (original != world.sidecar_blobs.end() && !original->second.empty()) {
+                n.flag_bytes = original->second;
+            }
             const auto od = was->extra.find("od");
             if (od != was->extra.end()) n.extra["od"] = *od;
         } else {

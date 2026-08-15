@@ -92,7 +92,7 @@ if(DRAGOMAN_BUILD_SHARED)
     set_target_properties(dragoman_shared PROPERTIES
         OUTPUT_NAME dragoman
         VERSION ${PROJECT_VERSION}
-        SOVERSION 1                     # the ABI version, not the release
+        SOVERSION 2                     # the ABI version, not the release
         C_VISIBILITY_PRESET hidden
         CXX_VISIBILITY_PRESET hidden
     )

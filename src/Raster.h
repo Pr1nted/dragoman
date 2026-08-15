@@ -115,6 +115,11 @@ std::vector<uint32_t> fillGaps(const std::vector<uint32_t>& ids, int w, int h, b
 std::set<uint32_t> computeCoastal(const std::map<uint32_t, std::set<uint32_t>>& adj,
                                   const std::set<uint32_t>& sea_ids);
 
+/* Bilinear resample, for the one place a picture has to change size: GD5
+ * stores a nation's flag as raw pixels at a fixed 60x40, so an Open Doctrines
+ * flag PNG of any size has to be brought to exactly that. */
+Image resizeImage(const Image& src, int w, int h);
+
 /* Open Doctrines places ships by latitude and longitude on an equirectangular
  * full-globe projection: lon = x/w*360 - 180, lat = 90 - y/h*180. GD5 places
  * units in a province. These two convert between the pair. */
