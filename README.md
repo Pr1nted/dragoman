@@ -23,6 +23,9 @@ world = dragoman.load("1914.odmap")
 print(world.name, len(world.provinces), "provinces")
 ```
 
+**[Read the wiki →](https://github.com/Pr1nted/dragoman/wiki)** — what it is,
+how to use it, what every message means, and what it cannot do.
+
 ## Status
 
 Every map both games ship round-trips without losing a single modelled field:

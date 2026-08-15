@@ -1,0 +1,43 @@
+# Keeps the Wiki tab equal to wiki/ in the tree.
+#
+# The wiki is a second git repository (<repo>.wiki.git) that a normal push does
+# not touch. Without this, pages get written, reviewed and merged, and the Wiki
+# tab stays empty for as long as publishing is a command somebody has to
+# remember. It is now the same event as merging the page.
+#
+# THE WIKI REPOSITORY MUST EXIST FIRST. GitHub creates it with its first page
+# and offers no API for that, so it is one manual click, once, ever: open the
+# repository's Wiki tab, "Create the first page", save anything. Until then this
+# job fails with those instructions rather than silently doing nothing.
+
+name: Publish wiki
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "wiki/**"
+      - "tools/publish_wiki.py"
+      - ".github/workflows/publish-wiki.yml"
+  workflow_dispatch:          # publish by hand after creating the first page
+
+# One publish at a time. Two runs pushing to the same wiki repository race, and
+# the loser fails on a non-fast-forward for a reason that has nothing to do with
+# what changed.
+concurrency:
+  group: publish-wiki
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write        # the wiki repository is written with this token
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 tools/publish_wiki.py
