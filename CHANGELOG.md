@@ -14,14 +14,21 @@ looking at what was wrong.
 - **Sea provinces are invented when the source game does not draw any.** Open
   Doctrines leaves its oceans unpainted; GD5 can neither render nor sail across
   what is not a province, so a converted map arrived with a black sea and no
-  fleet could move. The water is now cut into provinces — 743 of them on the
-  world map — by splitting each grid cell into its connected pieces, so the
-  Mediterranean and the Atlantic stay separate where one cell covers both. The
-  ids are recorded in the sidecar and deleted again on the way back, so the
-  round trip is unaffected. New `synthesise_ocean` option, default on.
-  The provinces are grown from jittered seeds through water rather than cut on
-  a grid, so they follow coastlines: 0.56 on bounding-box fill against GD5's
-  own 0.66, where a grid would be 1.00.
+  fleet could move.
+
+  The water is **grown** into provinces, not cut: seeds are laid on a lattice,
+  displaced by a hash of their own coordinates so the shapes are irregular but
+  a map still converts identically twice, snapped to the nearest water, and
+  grown outwards all at once through water only. Each province is the water
+  nearest one seed, so it follows the coast — 0.56 on bounding-box fill against
+  the 0.66 of GD5's own hand-drawn ones, where a grid would be 1.00. A province
+  cannot cross land, so the Mediterranean and the Atlantic are separate however
+  close two seeds fall.
+
+  The world map gets 917: one network of 747 that is every ocean joined
+  together, and 163 lakes. The ids are recorded in the sidecar and deleted
+  again on the way back, so the round trip is unaffected. New
+  `synthesise_ocean` option, default on.
 
 ### Fixed
 
