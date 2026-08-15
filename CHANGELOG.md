@@ -4,6 +4,32 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [semver](https://semver.org/), with a separate ABI version — see
 [docs/versioning.md](docs/versioning.md).
 
+## [0.2.1] — 2026-08-15
+
+The first release published from CI. Everything here is packaging and
+portability — no map is converted differently by this version, and the ABI is
+unchanged at 2.
+
+### Fixed
+
+- **Wheels are usable by more than one interpreter.** They were being tagged
+  `cp314-cp314-macosx_26_0_arm64`: CPython 3.14 only, macOS 26 only. Nothing
+  here compiles against CPython's ABI — the library is plain C loaded by ctypes
+  — so that tag was an accident of whichever interpreter ran the build. Now
+  `py3-none-macosx_11_0_arm64`: any Python 3, macOS 11 and up. 0.2.0 on PyPI is
+  effectively installable by nobody; this is the release to use.
+- **A turn counter no longer narrows on Windows.** `Date::turn` was `long`,
+  which is 64-bit on Linux and macOS and 32-bit on MSVC, so reading one out of
+  JSON truncated. It is `int64_t` now, like every other integer in the model.
+  Caught by CI's first Windows run.
+- **The Windows build links the right library.** A DLL produces an import
+  library beside it, and the shared target is named `dragoman`, so both it and
+  the static archive wrote `dragoman.lib` into the same directory. The tests
+  ended up linked against the DLL's import library, which exports only the C
+  ABI, and every internal C++ symbol was unresolved. The static archive is
+  `dragoman_static.lib` on Windows now; consumers are unaffected, since CMake
+  links by target name.
+
 ## [0.2.0] — 2026-08-15
 
 Both changes here came from opening converted maps in the games themselves and
@@ -115,4 +141,6 @@ Facts established against the real data, each of which cost a bug first:
   to GD5 arrives with nothing to sail on. Reported as `gd5.nosea` rather than
   passed over in silence.
 
+[0.2.1]: https://github.com/Pr1nted/dragoman/releases/tag/v0.2.1
+[0.2.0]: https://github.com/Pr1nted/dragoman/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Pr1nted/dragoman/releases/tag/v0.1.0
