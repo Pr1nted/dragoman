@@ -167,7 +167,8 @@ left inside the landmass — the same invariant Open Doctrines' own maps hold.
 | flag | a PNG path into the archive | raw 60x40 pixels, base64, in `flag_data` | mapped, see below |
 | alliance / war | `relations.json` | `allied_with`, `at_war_with` | mapped |
 | non-aggression, guarantee | `relations.json` | — | carried |
-| research, faction, manpower, fuel | — | `research`, `faction`, … | carried |
+| research | — (compiled into the game) | `research` per nation | **derived from the date**, see below |
+| faction, manpower, fuel | — | `faction`, `manpower`, `fuel` | carried |
 
 ### Treasury and materials are not the same number
 
@@ -182,6 +183,35 @@ world on the first simulated turn. Dragoman reports this as `od.treasury` rather
 than inventing a number and calling it a translation: the remedy is to set
 starting treasuries in Open Doctrines' map editor, and only a person who knows
 what the scenario is for can choose them.
+
+### Research is not in an Open Doctrines map
+
+It is not carried, not stored, not anywhere: Open Doctrines builds its tree in
+C++ in `Game_Research.cpp` and hands out each country's starting nodes from a
+hardcoded list of ISO codes — tier one (USA, CHN, GBR, FRA, DEU, JPN) gets
+`fort1-3`, `ind1-5`, `port1-3`; everyone else gets `ind1` and `basic_training`.
+Nothing about that reaches the `.odmap`.
+
+Converted straight across, every nation arrived in GD5 at level zero in
+everything — a stone-age 1914 with no infantry and no factories.
+
+What both formats *do* carry is the date, and GD5 already knows what to do with
+one: `queries.get_time_appropriate_research(year)` walks its tech tree and gives
+each technology a level equal to the number of its introduction years that have
+passed (counting the year itself for infantry, strictly before it for the rest).
+
+Dragoman applies that rule — reading the tech tree out of
+`data/json/research_template.json` **in the GD5 installation being written
+into**, not from a copy kept here. A copy would go stale the moment anyone
+modded a technology or moved a year, and the data is not this project's to
+carry. If no installation is found beside the destination, research is left
+alone and `gd5.research` says so.
+
+A nation that arrives *with* research — anything that came from GD5 — keeps
+exactly what it had. Only the empty ones are filled.
+
+Going the other way there is nowhere to put it, so GD5's research rides in the
+sidecar and returns intact.
 
 ### A flag is not a file in GD5
 

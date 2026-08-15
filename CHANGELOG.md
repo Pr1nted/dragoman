@@ -30,6 +30,15 @@ looking at what was wrong.
   again on the way back, so the round trip is unaffected. New
   `synthesise_ocean` option, default on.
 
+- **Research is derived from the map's date.** Open Doctrines stores none in a
+  map — its tree is compiled into the game and seeded from a hardcoded list of
+  ISO codes — so converted maps reached GD5 with every nation at level zero in
+  everything. GD5 already knows how to turn a year into research levels, so
+  that rule is applied against the tech tree read out of the GD5 installation
+  being written into, rather than a copy kept here that would go stale. Output
+  matches GD5's own `get_time_appropriate_research` exactly for 1914 and 2000.
+  Nations that arrive with research keep it.
+
 ### Fixed
 
 - **Flags now render in GD5.** `flag_data` is not base64 of a PNG, which is

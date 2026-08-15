@@ -117,6 +117,67 @@ std::string provinceKey(int64_t id) {
     return std::string(buf);
 }
 
+/* Research, from GD5's own tech tree and GD5's own rule.
+ *
+ * Open Doctrines does not put research in a map at all. Its tree is built in
+ * C++ in Game_Research.cpp and each country's starting nodes are handed out by
+ * a hardcoded list of ISO codes -- tier one gets fort1-3 and ind1-5, everyone
+ * else gets ind1 and basic_training. So there is nothing in a .odmap to read,
+ * and a converted map arrived in GD5 with every nation at level zero in
+ * everything: no infantry, no factories, a stone age 1914.
+ *
+ * What both formats do carry is the date, and GD5 already knows what to do
+ * with one. queries.get_time_appropriate_research(year) walks its tech tree
+ * and gives each tech a level equal to the number of its introduction years
+ * that have passed. That rule is applied here, against the tech tree read out
+ * of the GD5 installation being written into -- not a copy kept in this
+ * library, which would go stale the moment anyone modded a tech or shifted a
+ * year, and is not ours to carry about anyway.
+ */
+std::string findTechTree(const std::string& map_dir) {
+    /* A map is written into <gd5>/base_maps/<name> or
+     * <gd5>/scenarios/<kind>/<name>, so the install is a few levels up. */
+    fs::path here = fs::absolute(map_dir);
+    for (int up = 0; up < 5 && !here.empty(); ++up) {
+        const fs::path candidate = here / "data" / "json" / "research_template.json";
+        std::error_code ec;
+        if (fs::exists(candidate, ec)) return candidate.string();
+        if (!here.has_parent_path() || here.parent_path() == here) break;
+        here = here.parent_path();
+    }
+    return std::string();
+}
+
+Json timeAppropriateResearch(const Json& tree, int year) {
+    /* queries.get_time_appropriate_research, followed exactly. The 9999 /
+     * 1800 pair is its sentinel for a tech with no ceiling; infantry_type and
+     * cavalry are pinned back to zero before the timeline is counted. */
+    Json out = Json::object();
+    for (auto it = tree.begin(); it != tree.end(); ++it) {
+        const Json& tech = it.value();
+        if (!tech.is_object()) continue;
+        out[it.key()] = tech.value("max_lvl", 0) == 9999 ? 1800 : 0;
+    }
+    if (out.contains("infantry_type")) out["infantry_type"] = 0;
+    if (out.contains("cavalry")) out["cavalry"] = 0;
+
+    for (auto it = tree.begin(); it != tree.end(); ++it) {
+        const Json& tech = it.value();
+        if (!tech.is_object() || !tech.contains("years") || !tech["years"].is_array()) continue;
+        /* Infantry counts the year itself, everything else counts strictly
+         * before it -- which is GD5's distinction, not one invented here. */
+        const bool infantry = tech.value("category", std::string()) == "INFANTRY";
+        int level = 0;
+        for (const auto& y : tech["years"]) {
+            if (!y.is_number()) continue;
+            const int introduced = y.get<int>();
+            if (infantry ? (introduced <= year) : (introduced < year)) ++level;
+        }
+        if (level > 0) out[it.key()] = level;
+    }
+    return out;
+}
+
 Json readJsonFile(const std::string& path, Report& report) {
     std::vector<uint8_t> bytes;
     if (!readFile(path, bytes) || bytes.empty()) return Json();
@@ -1025,6 +1086,55 @@ bool writeGd5Map(const std::string& dir, const World& world, const Options& opt,
         report.warn("gd5.relations",
                     "non-aggression pacts and guarantees have no GD5 counterpart and were not "
                     "written into the map; they are preserved in the sidecar and return intact");
+    }
+
+    /* ---- research ----
+     *
+     * Only for nations that arrive without any: one that came from GD5 keeps
+     * exactly what it had, carried through the sidecar. A map from Open
+     * Doctrines has none for anybody, and gets the levels its own date implies.
+     */
+    long unresearched = 0;
+    for (auto it = nationData.begin(); it != nationData.end(); ++it) {
+        if (!it.value().contains("research") || !it.value()["research"].is_object()
+            || it.value()["research"].empty()) {
+            ++unresearched;
+        }
+    }
+    if (unresearched > 0) {
+        const std::string treePath = findTechTree(dir);
+        if (treePath.empty()) {
+            report.warn("gd5.research",
+                        std::to_string(unresearched)
+                            + " nation(s) have no research, and GD5's tech tree was not found "
+                              "beside the destination (data/json/research_template.json). They "
+                              "will start at level zero in everything. Convert into a GD5 "
+                              "installation, or set research in GD5's own research editor.");
+        } else {
+            Report quiet;
+            const Json tree = readJsonFile(treePath, quiet);
+            if (!tree.is_object() || tree.empty()) {
+                report.warn("gd5.research", "GD5's tech tree at " + treePath + " could not be read");
+            } else {
+                const Json levels = timeAppropriateResearch(tree, world.date.year);
+                for (auto it = nationData.begin(); it != nationData.end(); ++it) {
+                    if (it.value().contains("research") && it.value()["research"].is_object()
+                        && !it.value()["research"].empty()) {
+                        continue;
+                    }
+                    it.value()["research"] = levels;
+                }
+                if (!meta.contains("default_research") || meta["default_research"].is_null()) {
+                    meta["default_research"] = levels;
+                }
+                report.info("gd5.research",
+                            "gave " + std::to_string(unresearched) + " nation(s) the research "
+                            "level GD5's own tech tree puts at " + std::to_string(world.date.year)
+                            + ", across " + std::to_string(tree.size())
+                            + " technologies. Open Doctrines does not store research in a map -- "
+                              "its tree is compiled into the game and seeded by ISO code.");
+            }
+        }
     }
 
     /* The sea provinces invented above are owned by "Ocean", which every GD5
