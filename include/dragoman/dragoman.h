@@ -52,9 +52,9 @@ extern "C" {
  * meaning, so a binding can refuse to load a library it cannot speak to
  * without having to parse a version string. */
 #define DRAGOMAN_VERSION_MAJOR 0
-#define DRAGOMAN_VERSION_MINOR 2
-#define DRAGOMAN_VERSION_PATCH 2
-#define DRAGOMAN_VERSION_STRING "0.2.2"
+#define DRAGOMAN_VERSION_MINOR 3
+#define DRAGOMAN_VERSION_PATCH 0
+#define DRAGOMAN_VERSION_STRING "0.3.0"
 #define DRAGOMAN_ABI_VERSION 2
 
 DG_API const char* dg_version_string(void);
