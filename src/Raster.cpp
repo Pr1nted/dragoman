@@ -161,14 +161,14 @@ std::set<uint32_t> seaIdsFromLandSea(const Image& land_sea,
 }
 
 Image politicalImage(const std::vector<uint32_t>& ids, int w, int h,
-                     const std::map<uint32_t, uint32_t>& owner_color) {
+                     const std::map<uint32_t, uint32_t>& owner_color, uint32_t fallback) {
     Image img;
     img.width = w;
     img.height = h;
     img.channels = 3;
     img.rgba.resize(ids.size() * 4);
     for (size_t p = 0, i = 0; p < ids.size(); ++p, i += 4) {
-        uint32_t rgb = 0x0a1428;  /* the shade both games use for open water */
+        uint32_t rgb = fallback;
         const auto it = owner_color.find(ids[p]);
         if (it != owner_color.end()) rgb = it->second;
         img.rgba[i] = uint8_t((rgb >> 16) & 0xff);

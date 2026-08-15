@@ -18,6 +18,7 @@
 #include "Check.h"
 #include "Fixture.h"
 #include "ModelJson.h"
+#include "Raster.h"
 
 using namespace dragoman;
 namespace fs = std::filesystem;
@@ -148,6 +149,46 @@ static void testFieldsSurviveTheCrossing() {
     CHECK(ger->relations.count("RUS") && ger->relations.at("RUS").non_aggression);
 }
 
+/* GD5 does not draw water into its political layer -- it paints the chroma key
+ * its renderer then sets as the surface's colorkey, so the terrain underneath
+ * shows through. Painting an ordinary blue there instead hands the game an
+ * opaque ocean pasted over its own map, which nothing in the model would ever
+ * notice. */
+static void testPoliticalLayerUsesTheChromaKey() {
+    const std::string odmap = writeFixtureOdmap();
+    REQUIRE(!odmap.empty());
+    const std::string gd5 = fixture::scratch("chroma-gd5");
+    fs::remove_all(gd5);
+
+    dg_options opts;
+    dg_options_defaults(&opts);
+    dg_report* report = nullptr;
+    REQUIRE(dg_convert(odmap.c_str(), gd5.c_str(), DG_FORMAT_GD5, &opts, &report) == 0);
+    dg_report_free(report);
+
+    std::vector<uint8_t> bytes;
+    REQUIRE(readFile(gd5 + "/political.png", bytes));
+    Image political;
+    REQUIRE(decodePng(bytes, political));
+
+    Options opt;
+    Report quiet;
+    World written;
+    REQUIRE(readGd5Map(gd5, opt, written, quiet));
+
+    /* Province 1 of the fixture is open sea across the top of the map. */
+    const size_t sea = 4 * (static_cast<size_t>(2) * written.width + 10);
+    CHECK_EQ(int(political.rgba[sea + 0]), 255);
+    CHECK_EQ(int(political.rgba[sea + 1]), 0);
+    CHECK_EQ(int(political.rgba[sea + 2]), 255);
+
+    /* Land keeps its owner's colour, and must never be the key itself. */
+    const size_t land = 4 * (static_cast<size_t>(20) * written.width + 10);
+    const bool isKey = political.rgba[land] == 255 && political.rgba[land + 1] == 0
+                       && political.rgba[land + 2] == 255;
+    CHECK(!isKey);
+}
+
 /* Turning the sidecar off is supposed to be a real choice with a real cost:
  * a smaller file that no longer round trips. Asserting that keeps the two
  * modes from quietly becoming the same thing. */
@@ -195,6 +236,7 @@ int main() {
     testOdToGd5AndBack();
     testGd5ToOdAndBack();
     testFieldsSurviveTheCrossing();
+    testPoliticalLayerUsesTheChromaKey();
     testWithoutSidecarLosesData();
     testRealMapsIfAvailable();
     return check::finish("test_roundtrip");

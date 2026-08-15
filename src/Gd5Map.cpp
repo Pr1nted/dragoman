@@ -32,6 +32,13 @@ namespace {
 
 constexpr double kMenPerHealth = 1000.0;
 
+/* data/constants.py: COLOR_CHROMA_PINK. Water and unowned space are painted
+ * this in the political and cores layers, and the renderer sets it as the
+ * surface's colorkey so the terrain beneath shows through. Writing an ordinary
+ * blue there instead gives GD5 an opaque ocean pasted over its own map. */
+constexpr uint32_t kChromaKey = 0xFF00FF;
+constexpr uint32_t kChromaNudged = 0xFE00FF;
+
 /* The palette map_tools/automatic_map_painter.py reads a hand-painted terrain
  * layer through. Writing exactly these values means a layer we generate can be
  * re-imported by GD5's own painter and come back with the same terrains. */
@@ -608,11 +615,23 @@ bool writeGd5Map(const std::string& dir, const World& world, const Options& opt,
                             {"resources", resources},
                             {"buildings", buildings}};
 
-        const Nation* n = world.findNation(p.owner);
-        if (n) ownerColor[static_cast<uint32_t>(p.id)] = n->color;
+        /* GD5 does not draw water into the political layer; it paints it the
+         * chroma key its renderer then sets as the surface's colorkey, so the
+         * terrain underneath shows through. A nation whose colour happens to
+         * be exactly that key is nudged one step off it, which is the same
+         * guard map_utils.avoid_chroma() applies on GD5's own side -- without
+         * it, that one country would be punched out as ocean. */
+        const Nation* n = p.is_sea ? nullptr : world.findNation(p.owner);
+        if (n) {
+            ownerColor[static_cast<uint32_t>(p.id)] =
+                n->color == kChromaKey ? kChromaNudged : n->color;
+        }
         if (!p.cores.empty()) {
             const Nation* cn = world.findNation(p.cores.front());
-            if (cn) coreColor[static_cast<uint32_t>(p.id)] = cn->color;
+            if (cn) {
+                coreColor[static_cast<uint32_t>(p.id)] =
+                    cn->color == kChromaKey ? kChromaNudged : cn->color;
+            }
         }
     }
 
@@ -707,9 +726,11 @@ bool writeGd5Map(const std::string& dir, const World& world, const Options& opt,
     const Image idImg = rasterToGd5(world.raster, world.width, world.height);
     writeFile(joinPath(dir, "id_map.png"), encodePng(idImg));
     writeFile(joinPath(dir, "political.png"),
-              encodePng(politicalImage(world.raster, world.width, world.height, ownerColor)));
+              encodePng(politicalImage(world.raster, world.width, world.height, ownerColor,
+                                       kChromaKey)));
     writeFile(joinPath(dir, "cores.png"),
-              encodePng(politicalImage(world.raster, world.width, world.height, coreColor)));
+              encodePng(politicalImage(world.raster, world.width, world.height, coreColor,
+                                       kChromaKey)));
 
     const auto carriedTerrain = world.sidecar_blobs.find("gd5/terrain.png");
     if (carriedTerrain != world.sidecar_blobs.end() && !opt.reencode_images) {
@@ -724,7 +745,8 @@ bool writeGd5Map(const std::string& dir, const World& world, const Options& opt,
             terrainColorOf[static_cast<uint32_t>(p.id)] = terrainColor(t);
         }
         writeFile(joinPath(dir, "terrain.png"),
-                  encodePng(politicalImage(world.raster, world.width, world.height, terrainColorOf)));
+                  encodePng(politicalImage(world.raster, world.width, world.height, terrainColorOf,
+                                           terrainColor("ocean"))));
     }
 
     writeFile(joinPath(dir, "map_data.json"), mapData.dump());

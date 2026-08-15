@@ -69,7 +69,7 @@ std::set<uint32_t> seaIdsFromLandSea(const Image& land_sea,
  * and rebuilds it at load, which is why it is generated here rather than
  * carried. */
 Image politicalImage(const std::vector<uint32_t>& ids, int w, int h,
-                     const std::map<uint32_t, uint32_t>& owner_color);
+                     const std::map<uint32_t, uint32_t>& owner_color, uint32_t fallback);
 
 /* --------------------------------------------------------------- derivation */
 
