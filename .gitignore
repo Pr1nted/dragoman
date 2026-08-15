@@ -1,0 +1,31 @@
+build/
+build-*/
+cmake-build-*/
+out/
+.cache/
+compile_commands.json
+
+*.o
+*.a
+*.so
+*.so.*
+*.dylib
+*.dll
+*.lib
+*.exp
+*.pdb
+
+__pycache__/
+*.egg-info/
+dist/
+.venv/
+
+.DS_Store
+.idea/
+.vscode/
+
+# Maps used for local conformance runs. Neither game's maps belong in this
+# repository -- Open Doctrines' are its own and GD5's are GPL -- so they are
+# pointed at from outside instead. See docs/roundtrip.md.
+maps/
+*.odmap
