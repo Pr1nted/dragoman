@@ -64,6 +64,18 @@ set(DRAGOMAN_SOURCES
 
 add_library(dragoman STATIC ${DRAGOMAN_SOURCES})
 add_library(dragoman::dragoman ALIAS dragoman)
+
+# On Windows a DLL also produces an import library, and dragoman_shared is
+# named `dragoman` -- so both targets wanted to write dragoman.lib into the same
+# directory. The shared one won, the tests linked the DLL's import library
+# instead of the static archive, and every internal C++ symbol came back
+# unresolved: readOdMap, startsWith, World::findProvince, all of it. Only the C
+# ABI is exported from the DLL, which is the point of it, so nothing else was
+# there to find. Renaming the static archive keeps dragoman.lib meaning what a
+# DLL consumer expects it to mean.
+if(WIN32)
+    set_target_properties(dragoman PROPERTIES OUTPUT_NAME dragoman_static)
+endif()
 target_include_directories(dragoman
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
