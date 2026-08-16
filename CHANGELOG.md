@@ -4,6 +4,31 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [semver](https://semver.org/), with a separate ABI version — see
 [docs/versioning.md](docs/versioning.md).
 
+## 0.3.1 — 2026-08-16
+
+### Fixed
+
+- **Every Python caller failed on maps with accented nation names.** Ten of
+  Greater Diplomacy 5's twelve shipped base maps could not be converted by
+  anything written in Python, while the command line tool converted all twelve
+  — and the difference was the caller's locale, not the map.
+
+  `<cctype>`'s `isalpha` and `toupper` answer according to the current locale.
+  A C++ program starts in `"C"` and never leaves it unless it says so, so the
+  CLI — and every test here, which is also a C++ program — saw ASCII rules and
+  was right. Python calls `setlocale(LC_ALL, "")` at startup. Under `C.UTF-8`,
+  `isalpha` accepts bytes above 0x7F and `toupper` maps them to *other* bytes
+  above 0x7F, so building an ISO 3166 code by walking a nation's name byte by
+  byte produced three mangled UTF-8 continuation bytes. The JSON writer then
+  refused the whole map: `invalid UTF-8 byte at index 2`.
+
+  ISO codes, file extensions, hex colours and table lookups are all defined in
+  ASCII, so they are now done by ASCII rules that no locale can reach.
+
+  The suite could not have caught this, because nothing in it ever set a
+  locale. `test_locale` now runs its checks three times: in `"C"`, in whatever
+  the environment says, and in an explicitly named UTF-8 locale.
+
 ## 0.3.0 — 2026-08-16
 
 ### Added

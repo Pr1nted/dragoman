@@ -59,7 +59,7 @@ std::string isoForName(const std::string& display_name) {
     auto normalise = [](const std::string& s) {
         std::string o;
         for (unsigned char c : s) {
-            if (std::isalnum(c)) o.push_back(static_cast<char>(std::tolower(c)));
+            if (asciiAlnum(c)) o.push_back(asciiLower(c));
         }
         return o;
     };
@@ -77,8 +77,8 @@ std::string synthesiseIso(const std::string& display_name, const std::vector<std
     std::string initials, letters;
     bool atWordStart = true;
     for (unsigned char c : display_name) {
-        if (std::isalpha(c)) {
-            const char up = static_cast<char>(std::toupper(c));
+        if (asciiAlpha(c)) {
+            const char up = asciiUpper(c);
             letters.push_back(up);
             if (atWordStart) initials.push_back(up);
             atWordStart = false;

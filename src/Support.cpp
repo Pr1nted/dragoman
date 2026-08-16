@@ -129,14 +129,14 @@ bool endsWith(const std::string& s, const std::string& suffix) {
 std::string toUpper(const std::string& s) {
     std::string o = s;
     std::transform(o.begin(), o.end(), o.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+                   [](unsigned char c) { return asciiUpper(c); });
     return o;
 }
 
 std::string toLower(const std::string& s) {
     std::string o = s;
     std::transform(o.begin(), o.end(), o.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                   [](unsigned char c) { return asciiLower(c); });
     return o;
 }
 

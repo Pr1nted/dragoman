@@ -63,6 +63,36 @@ std::string trim(const std::string& s);
 std::vector<std::string> splitLines(const std::string& s);
 std::vector<std::string> splitOn(const std::string& s, char sep);
 bool startsWith(const std::string& s, const std::string& prefix);
+/* ------------------------------------------------------------------ ascii
+ *
+ * Character classification that does NOT consult the locale, and the reason
+ * is a bug that only appeared when somebody called this library from Python.
+ *
+ * <cctype>'s isalpha/toupper answer according to the current locale. A C++
+ * program never sets one, so they behave as ASCII and every test here passed.
+ * Python calls setlocale() at startup -- so under C.UTF-8, isalpha() accepts
+ * bytes above 0x7F and toupper() maps them to OTHER bytes above 0x7F. Walking
+ * a UTF-8 name byte by byte then produced a three-byte "ISO code" of mangled
+ * continuation bytes, and the JSON writer refused it: "invalid UTF-8 byte at
+ * index 2". Ten of Greater Diplomacy 5's twelve base maps could not be
+ * converted by any Python caller, while the command line tool converted all
+ * twelve.
+ *
+ * Everything these are used for -- ISO 3166 codes, file extensions, hex
+ * colours, matching names against a table -- is defined in ASCII. So these
+ * are the ASCII rules, spelled out, and no locale can change them. */
+inline bool asciiAlpha(unsigned char c) {
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+}
+inline bool asciiDigit(unsigned char c) { return c >= '0' && c <= '9'; }
+inline bool asciiAlnum(unsigned char c) { return asciiAlpha(c) || asciiDigit(c); }
+inline char asciiUpper(unsigned char c) {
+    return (c >= 'a' && c <= 'z') ? static_cast<char>(c - 'a' + 'A') : static_cast<char>(c);
+}
+inline char asciiLower(unsigned char c) {
+    return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : static_cast<char>(c);
+}
+
 bool endsWith(const std::string& s, const std::string& suffix);
 std::string toUpper(const std::string& s);
 std::string toLower(const std::string& s);
