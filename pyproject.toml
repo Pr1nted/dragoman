@@ -19,7 +19,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "open-dragoman"
-version = "0.3.1"
+version = "0.3.2"
 description = "Translate maps between Open Doctrines and Greater Diplomacy 5"
 readme = "README.md"
 requires-python = ">=3.8"

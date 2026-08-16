@@ -4,6 +4,34 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [semver](https://semver.org/), with a separate ABI version — see
 [docs/versioning.md](docs/versioning.md).
 
+## 0.3.2 — 2026-08-16
+
+**No code changed.** The library is byte-for-byte what 0.3.1 built; only the
+documentation is new. Said plainly because a version number usually implies
+otherwise, and nobody should go looking for a behaviour change that is not
+there.
+
+### Added
+
+- **[docs/locator.md](docs/locator.md) — how a game says where it is.**
+
+  Translating a map means writing it where the other game will find it, which
+  means knowing where the other game is. Both sides were guessing: a fixed list
+  of the usual install folders, one level deep, and a folder picker when the
+  guess missed. A game already knows exactly where it is; it only has to write
+  it down.
+
+  One small JSON file per game in a shared per-user directory, rewritten at
+  every launch. Open Doctrines and Greater Diplomacy 5 both implement it, so
+  neither has to search when the other has ever run.
+
+  Most of the document is about the awkward half: a locator goes stale and
+  nothing announces it. A moved game corrects its file on next launch, a
+  deleted one never does, so a file pointing at nothing is the ordinary state
+  rather than an edge case. Hence the rules — verify before offering, verify
+  again before each use, never delete a file that is not yours, and never read
+  one as permission to write.
+
 ## 0.3.1 — 2026-08-16
 
 ### Fixed
