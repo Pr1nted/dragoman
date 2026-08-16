@@ -106,8 +106,73 @@ jobs:
           name: dragoman-${{ matrix.name }}
           path: stage/
 
+  # The library as a WebAssembly SIDE MODULE, for a Python that is itself
+  # running in a browser.
+  #
+  # pygbag and Pyodide install pure-Python wheels and their own prebuilt WASM
+  # ones; this library is neither, so a browser game cannot pip install it. It
+  # can, however, ctypes.CDLL a side module sitting beside it -- verified in
+  # pygbag's own CPython 3.12 runtime, which loads this and calls into it even
+  # though it was built with a different emscripten.
+  #
+  # Shipped as a release asset rather than a wheel because there is no wheel
+  # tag that means "loadable by whatever CPython the browser happens to have".
+  wasm:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mymindstorm/setup-emsdk@v14
+
+      - name: Build the side module
+        run: |
+          set -e
+          # nlohmann/json is vendored flat; the sources include it by its
+          # canonical path, so it is staged under that name for this build.
+          mkdir -p wasm-include/nlohmann
+          cp third_party/json/json.hpp wasm-include/nlohmann/
+          em++ -std=c++17 -O2 -fPIC -sSIDE_MODULE=1 \
+               -I include -I src -I wasm-include \
+               -I third_party/miniz -I third_party/stb \
+               src/*.cpp third_party/miniz/*.c third_party/stb/*.c \
+               -o libdragoman.so
+          ls -la libdragoman.so
+
+      # A side module that linked is not the same as one a browser Python can
+      # open. Node's WASM is the same engine, so ctypes here answers the same
+      # question without a browser in the loop.
+      - name: It loads and answers
+        run: |
+          set -e
+          npm install --silent pyodide
+          cat > check.mjs <<'JS'
+          import { loadPyodide } from "pyodide";
+          import fs from "fs";
+          const py = await loadPyodide();
+          py.FS.writeFile("/libdragoman.so", new Uint8Array(fs.readFileSync("libdragoman.so")));
+          py.runPython(`
+          import ctypes
+          lib = ctypes.CDLL("/libdragoman.so")
+          lib.dg_version_string.restype = ctypes.c_char_p
+          lib.dg_abi_version.restype = ctypes.c_int
+          result = lib.dg_version_string().decode() + " abi " + str(lib.dg_abi_version())
+          `);
+          const got = py.globals.get("result");
+          console.log("side module says:", got);
+          if (!got.startsWith(process.env.EXPECT)) {
+            console.error("expected version " + process.env.EXPECT);
+            process.exit(1);
+          }
+          JS
+          EXPECT="$(cat VERSION)" node check.mjs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dragoman-wasm
+          path: libdragoman.so
+
   publish:
-    needs: build
+    needs: [build, wasm]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
@@ -120,7 +185,13 @@ jobs:
           for dir in */; do
             tar czf "../${dir%/}.tar.gz" -C "$dir" .
           done
+          # The side module goes up on its own as well as in its tarball: a
+          # browser game fetches this one file by name, and asking it to
+          # unpack a tarball to get at it helps nobody.
+          cp dragoman-wasm/libdragoman.so ../libdragoman.so
       - uses: softprops/action-gh-release@v2
         with:
-          files: "*.tar.gz"
+          files: |
+            *.tar.gz
+            libdragoman.so
           generate_release_notes: true
