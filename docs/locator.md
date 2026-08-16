@@ -74,7 +74,6 @@ that has since been deleted, moved, or replaced by something else entirely. So:
    `data/json/research_template.json`.
 2. If it fails that check, ignore the file. Do not delete it — it is not yours.
 3. Show the player what you found before you write anything into it.
-
 4. Re-check it before each use, not once at startup. A screen that found a
    game when it opened may still be on screen an hour later, offering to write
    into a folder that stopped existing in between. It is one `stat` against a
