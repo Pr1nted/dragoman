@@ -4,6 +4,41 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [semver](https://semver.org/), with a separate ABI version — see
 [docs/versioning.md](docs/versioning.md).
 
+## 0.4.0 — 2026-08-30
+
+### Added
+
+- **Forts cross.** Greater Diplomacy 5 added forts as a building — `Fort Lvl N`,
+  one per province — after this library was written, and Open Doctrines has
+  always had a per-province `fortification`. The two describe the same thing,
+  so it is now translated both ways instead of being carried in the sidecar and
+  handed back unseen by the destination game.
+
+  The ladders are different heights: GD5's `FORT_MAX_LEVEL` is 20, Open
+  Doctrines clamps to 5. Levels are **scaled ×4 rather than clamped**, because
+  clamping would flatten every GD5 level above 5 into the same Open Doctrines
+  fort and lose the shape of a fortified world. Writing multiplies exactly and
+  reading divides rounding up, so a round trip returns the level it set out as,
+  and a GD5 fort of any level arrives as at least level 1 — rounding down would
+  have deleted its levels 1–3 outright.
+
+  Note that this is the fort, not the technology: GD5 has no fortification tech,
+  so `fort1`…`fort6` still do not cross. See
+  [docs/research.md](docs/research.md).
+
+### Changed
+
+- **A fort built in Greater Diplomacy 5 survives coming home.** The sidecar
+  remembers the level a map left with, and used to win unconditionally on the
+  way back — correct when GD5 had no forts to build, and wrong now, because a
+  player who built one watched it disappear. The map wins; the record only
+  fills a gap. Level zero is still read from the record, since GD5 cannot say
+  "razed" distinctly from "never had one".
+
+- **Writing a map rewrites its fort** rather than passing through whichever one
+  it arrived with, so a level changed in Open Doctrines is the level GD5 gets.
+  Every other building is left exactly where it was.
+
 ## 0.3.2 — 2026-08-16
 
 **No code changed.** The library is byte-for-byte what 0.3.1 built; only the

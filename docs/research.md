@@ -51,6 +51,12 @@ technology is set to that fraction of its ceiling.
 
 - **`fort1`…`fort6` and `port1`…`port3`.** GD5 has no fortification or port
   technology. Any value would be invented.
+
+  Not to be confused with the forts themselves, which do cross: GD5 has a
+  `Fort Lvl N` *building*, and a province's level is translated both ways (see
+  [mapping.md](mapping.md)). What it has no counterpart for is the *research*
+  that unlocks a level in Open Doctrines — there is no fort technology in its
+  tech tree to give a level to.
 - **The named army nodes** — `professional_army`, `combined_arms`, `total_war`
   and the rest. They are not a ladder: they branch, and several sit in mutex
   groups where taking one forecloses another. A prefix of that list would hand

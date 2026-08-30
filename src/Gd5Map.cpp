@@ -32,6 +32,60 @@ namespace {
 
 constexpr double kMenPerHealth = 1000.0;
 
+/* FORTS.
+ *
+ * Both games now have one, which they did not when this library was written:
+ * GD5 added forts as a building, "Fort Lvl N", one per province, and reads a
+ * province's level as the highest such building on it (data/queries.py,
+ * get_fort_level). Open Doctrines has had a per-province `fortification` all
+ * along. So the two finally describe the same thing and it can cross.
+ *
+ * The ladders are different heights -- GD5 goes to FORT_MAX_LEVEL, which is
+ * 20; Open Doctrines' editor and mod API both clamp to 5 -- so this scales
+ * rather than clamping. Clamping would flatten every GD5 level above 5 into
+ * the same Open Doctrines fort and lose the shape of a fortified world.
+ *
+ * The two directions are inverses on purpose: writing multiplies exactly, and
+ * reading divides ROUNDING UP, so a fort that leaves Open Doctrines at level 3
+ * comes home at 3 and not at 2. Reading up also means a GD5 fort of any level
+ * at all arrives as at least level 1, rather than four of GD5's twenty levels
+ * vanishing into "no fort". Same convention, and the same reason, as the
+ * research ladders in Research.cpp. */
+constexpr int kOdFortMax = 5;
+constexpr int kGd5FortMax = 20;
+constexpr int kFortScale = kGd5FortMax / kOdFortMax;  /* 4 */
+
+/* "Fort Lvl 12" -> 12. Anything else -> 0. Matches GD5's own
+ * `re.fullmatch(r"Fort Lvl (\d+)", name)`, including its refusal to accept
+ * trailing text. */
+int gd5FortLevel(const std::string& name) {
+    static const std::string prefix = "Fort Lvl ";
+    if (!startsWith(name, prefix)) return 0;
+    const std::string digits = name.substr(prefix.size());
+    if (digits.empty()) return 0;
+    for (char c : digits) {
+        if (!asciiDigit(c)) return 0;
+    }
+    /* A level GD5 itself could not have built is not trusted as a number. */
+    const long value = std::strtol(digits.c_str(), nullptr, 10);
+    if (value <= 0 || value > kGd5FortMax) return 0;
+    return static_cast<int>(value);
+}
+
+/* GD5 level -> Open Doctrines level, rounding up. */
+int fortFromGd5(int gd5Level) {
+    if (gd5Level <= 0) return 0;
+    const int od = (gd5Level + kFortScale - 1) / kFortScale;
+    return od > kOdFortMax ? kOdFortMax : od;
+}
+
+/* Open Doctrines level -> GD5 level. Exact, so the round trip is exact. */
+int fortToGd5(int odLevel) {
+    if (odLevel <= 0) return 0;
+    const int clamped = odLevel > kOdFortMax ? kOdFortMax : odLevel;
+    return clamped * kFortScale;
+}
+
 /* data/constants.py: COLOR_CHROMA_PINK. Water and unowned space are painted
  * this in the political and cores layers, and the renderer sets it as the
  * surface's colorkey so the terrain beneath shows through. Writing an ordinary
@@ -584,15 +638,22 @@ bool readGd5Map(const std::string& dir, const Options& opt, World& world, Report
             }
 
             /* Buildings stand in for Open Doctrines' industry level: the
-             * factories are counted, everything else is remembered. */
+             * factories are counted, the forts become a fortification level,
+             * everything else is remembered. */
             if (src->contains("buildings") && (*src)["buildings"].is_array()) {
                 int factories = 0;
+                int fort = 0;
                 for (const auto& b : (*src)["buildings"]) {
-                    if (b.is_string() && b.get<std::string>().find("Factory") != std::string::npos) {
-                        ++factories;
-                    }
+                    if (!b.is_string()) continue;
+                    const std::string name = b.get<std::string>();
+                    if (name.find("Factory") != std::string::npos) ++factories;
+                    /* GD5 keeps one fort per province and reads its level as
+                     * the highest it finds, so this takes the maximum too
+                     * rather than the last one in the list. */
+                    fort = std::max(fort, gd5FortLevel(name));
                 }
                 prov.industry = factories;
+                prov.fortification = fortFromGd5(fort);
                 prov.extra["gd5_buildings"] = (*src)["buildings"];
             }
 
@@ -942,6 +1003,24 @@ bool writeGd5Map(const std::string& dir, const World& world, const Options& opt,
             buildings = *bld;
         } else {
             for (int i = 0; i < p.industry; ++i) buildings.push_back("Basic Factory");
+        }
+
+        /* The fort is rewritten from `fortification` rather than left as it
+         * was found. On a map that came from GD5 the carried list already has
+         * one, and a player who changed the level in Open Doctrines would
+         * otherwise get the old building back. GD5 keeps one fort per province
+         * -- placing one drops the previous, in ui/event_handler.py -- so the
+         * old entries go before the new one is added, and every building that
+         * is not a fort is left exactly where it was. */
+        {
+            Json kept = Json::array();
+            for (const auto& b : buildings) {
+                if (b.is_string() && gd5FortLevel(b.get<std::string>()) > 0) continue;
+                kept.push_back(b);
+            }
+            const int level = fortToGd5(p.fortification);
+            if (level > 0) kept.push_back("Fort Lvl " + std::to_string(level));
+            buildings = kept;
         }
 
         /* GD5 names resources its own way -- "Oil", "Tungsten" -- while Open

@@ -23,6 +23,7 @@ dragoman_test(test_scripts)
 dragoman_test(test_locale)
 dragoman_test(test_research)
 dragoman_test(test_roundtrip)
+dragoman_test(test_forts)
 dragoman_test(test_abi)
 dragoman_test(test_cpp_wrapper fixture_writer.cpp)
 

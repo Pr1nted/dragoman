@@ -356,7 +356,22 @@ void restoreUnrepresentable(World& world, Report& report) {
         if (readGd5) {
             p.population = was->population;
             p.port_level = was->port_level;
-            p.fortification = was->fortification;
+            /* Fortification is the one field here the destination game can
+             * now change for itself, so the map wins and the record only
+             * fills a gap. GD5 gained forts as a building after this sidecar
+             * was designed; before that, a fort could only ever come back
+             * from the record, and taking the record unconditionally was
+             * right. It is not any more -- a player who builds a fort in GD5
+             * and translates home would have watched it disappear.
+             *
+             * Zero is treated as "the map said nothing" rather than "the
+             * player demolished it": GD5 has no way to express a razed fort
+             * distinctly from never having had one, and silently discarding a
+             * level the map still remembers is the worse of the two mistakes.
+             * Levels do not survive exactly in both directions -- see the
+             * scaling note in Gd5Map.cpp -- so this is the field's own value,
+             * not the one it started with. */
+            if (p.fortification <= 0) p.fortification = was->fortification;
             p.resources = was->resources;
             if (p.name.empty()) p.name = was->name;
             for (auto it = was->extra.begin(); it != was->extra.end(); ++it) {

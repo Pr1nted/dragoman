@@ -96,7 +96,8 @@ packs with miniz. Every file *inside* is preserved exactly.
 | Owner, name, claims | ✅ | ✅ |
 | Cores | — | ✅ (carried) |
 | Sea provinces | — (**synthesised** for GD5) | ✅ |
-| Population, ports, fortification | ✅ | — (carried) |
+| Population, ports | ✅ | — (carried) |
+| Fortification | ✅ 0–5 | ✅ `Fort Lvl N`, 1–20 (**scaled** ×4) |
 | Minorities, political compass, policies | ✅ | — (carried) |
 | Terrain, adjacency, province centres | — (**derived** from the raster) | ✅ |
 | Units, buildings, research, factions | — (armies carried) | ✅ |
