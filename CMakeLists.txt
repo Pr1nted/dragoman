@@ -105,7 +105,12 @@ if(MSVC)
         target_compile_options(dragoman PRIVATE /WX)
     endif()
 else()
-    target_compile_options(dragoman PRIVATE -Wall -Wextra)
+    # -Wshadow is not in -Wall -Wextra, but MSVC's /W4 does warn on a shadowed
+    # local (C4456) and /WX makes it an error -- so without this the same code
+    # compiles on two of the three platforms and fails on the third, which is
+    # the slowest possible way to find out. It has happened: 0.4.1's first tag
+    # built here, built on Linux and macOS, and broke the Windows job.
+    target_compile_options(dragoman PRIVATE -Wall -Wextra -Wshadow)
     if(DRAGOMAN_WARNINGS_AS_ERRORS)
         target_compile_options(dragoman PRIVATE -Werror)
     endif()

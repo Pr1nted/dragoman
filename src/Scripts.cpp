@@ -280,38 +280,37 @@ static bool odScriptToEvents(const ScriptSource& src, const std::string& default
              * third word used to be the value, and taking it now assigns the
              * literal string "=" to the variable, with no warning, in a
              * translation that otherwise looks like it worked. */
-            std::vector<std::string> v(w.begin(), w.end());
+            std::vector<std::string> sw(w.begin(), w.end());
             {
                 static const char* kCompound[] = {"+=", "-=", "*=", "/="};
                 bool compound = false;
                 for (const char* op : kCompound) {
-                    if (v[2] == op) { compound = true; break; }
+                    if (sw[2] == op) { compound = true; break; }
                 }
                 if (compound) {
                     /* A GD5 event sets a variable; it cannot fold one against
                      * what is already there. */
-                    unsupportedKind = "compound assignment (" + v[2] + ")";
+                    unsupportedKind = "compound assignment (" + sw[2] + ")";
                     sawUnsupported = true;
                     continue;
                 }
-                if (v[2] == "=") {
-                    const std::vector<std::string> rhs(v.begin() + 3, v.end());
+                if (sw[2] == "=") {
+                    const std::vector<std::string> rhs(sw.begin() + 3, sw.end());
                     if (!isPlainValue(rhs)) {
                         unsupportedKind = "an arithmetic assignment";
                         sawUnsupported = true;
                         continue;
                     }
                     /* Drop the operator and the line is the version 1 form. */
-                    v.erase(v.begin() + 2);
+                    sw.erase(sw.begin() + 2);
                 }
             }
-            const std::vector<std::string>& w = v;
-            const std::vector<std::string> lhs = dotted(w[1]);
+            const std::vector<std::string> lhs = dotted(sw[1]);
             Action a;
             if (lhs.size() == 3 && lhs[0] == "country") {
                 const std::string& field = lhs[2];
-                a.target = w.size() >= 3 ? w[2] : "";
-                const bool on = w.size() < 4 || toLower(w[3]) != "false";
+                a.target = sw.size() >= 3 ? sw[2] : "";
+                const bool on = sw.size() < 4 || toLower(sw[3]) != "false";
                 if (field == "at_war_with") {
                     a.kind = on ? "declare_war" : "ceasefire";
                     current.owner = lhs[1];
@@ -321,11 +320,11 @@ static bool odScriptToEvents(const ScriptSource& src, const std::string& default
                 } else if (field == "treasury") {
                     a.kind = "set_treasury";
                     a.target = lhs[1];
-                    a.message = w[2];
+                    a.message = sw[2];
                 } else if (field == "name") {
                     a.kind = "edit_name";
                     a.target = lhs[1];
-                    a.message = unquote(w[2]);
+                    a.message = unquote(sw[2]);
                 } else {
                     a.kind = "unsupported";
                     a.message = line;
@@ -333,7 +332,7 @@ static bool odScriptToEvents(const ScriptSource& src, const std::string& default
             } else if (lhs.size() == 3 && lhs[0] == "province") {
                 if (lhs[2] == "owner") {
                     a.kind = "give_territory";
-                    a.target = w[2];
+                    a.target = sw[2];
                     a.message = lhs[1];
                 } else {
                     a.kind = "unsupported";
@@ -342,7 +341,7 @@ static bool odScriptToEvents(const ScriptSource& src, const std::string& default
             } else if (lhs.size() == 2 && lhs[0] == "var") {
                 a.kind = "set_var";
                 a.target = lhs[1];
-                a.message = unquote(w[2]);
+                a.message = unquote(sw[2]);
             } else if (lhs.size() == 2 && lhs[0] == "map" && lhs[1] == "date") {
                 a.kind = "unsupported";
                 a.message = line;
