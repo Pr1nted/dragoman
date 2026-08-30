@@ -4,6 +4,46 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [semver](https://semver.org/), with a separate ABI version — see
 [docs/versioning.md](docs/versioning.md).
 
+## 0.4.1 — 2026-08-30
+
+### Fixed
+
+- **An assignment's operator was being read as its value.** Open Doctrines'
+  engine version 2 writes `set var.gold = 100` where version 1 wrote
+  `set var.gold 100`. This library read the third word as the value either way,
+  so it translated the variable as the literal string `"="` — with no warning,
+  in a script that otherwise looked translated. `+=` produced `"+="` the same
+  way.
+
+  That is the failure this library is built to avoid: it is not a gap in
+  coverage but a wrong answer stated confidently. Both games' block editors
+  normalise assignments to that form, so anything written in one hit it.
+
+### Added
+
+- **The C-style assignment spellings are understood.** Version 2 makes `set`
+  optional and allows `+=`, `-=`, `*=`, `/=`, `++` and `--`; the engine
+  normalises all of them to a `set` line before doing anything else, sharing
+  one normaliser between the engine, the linter and the block editor. This is a
+  mirror of it, so `var.gold = 100` now translates where it was previously
+  carried untranslated.
+
+  Not everything crosses: the compound forms and an arithmetic right-hand side
+  are refused, because a GD5 event sets a variable rather than computing one.
+  See [docs/scripting.md](docs/scripting.md).
+
+### Changed
+
+- **A refused script names what it found.** The report said "loops,
+  conditionals or collections" whatever the reason, which after version 2 is
+  usually wrong — a script stopped by a `label` or a `dialog` sent the reader
+  looking for a loop that was not there. Version 2's fifteen statements are
+  each recognised and named.
+
+- **Generated scripts declare `#OD/MapEngine/2`.** The body is still version 1
+  syntax, which version 2 accepts, but declaring 1 pinned a script the block
+  editor may reopen to a dialect the game is moving away from.
+
 ## 0.4.0 — 2026-08-30
 
 ### Added

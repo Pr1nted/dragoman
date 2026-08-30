@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 
 namespace dragoman {
 
@@ -60,7 +61,99 @@ bool isComparison(const std::string& s) {
 
 /* The block openers Open Doctrines has and GD5 has no way to express. */
 bool opensBlock(const std::string& head) {
-    return head == "if" || head == "foreach" || head == "while";
+    return head == "if" || head == "foreach" || head == "while" || head == "for"
+        || head == "repeat" || head == "unless" || head == "try";
+}
+
+/* The statements Open Doctrines' engine version 2 added, named so a script
+ * that uses one is reported as what it is rather than as "loops, conditionals
+ * or collections" -- which was the whole of the language when this was
+ * written, and is now a guess that is usually wrong. Kept in the engine's own
+ * order (ScriptEngine.cpp, isVersion2Statement) to make the two easy to
+ * compare when it gains another. */
+bool isVersion2Statement(const std::string& kw) {
+    static const char* kV2[] = {"for", "repeat", "break", "continue", "print", "elseif",
+                                "unless", "label", "jump", "spawn", "stop",
+                                "try", "catch", "endtry", "dialog"};
+    for (const char* k : kV2) {
+        if (kw == k) return true;
+    }
+    return false;
+}
+
+/* A reference: a name, then any of name characters and dots. ASCII only, on
+ * purpose -- the engine's own version of this uses <cctype>, which answers
+ * according to the caller's locale, and that is the bug test_locale exists to
+ * stop this library repeating. */
+bool looksLikeRef(const std::string& r) {
+    if (r.empty()) return false;
+    if (!(asciiAlpha(static_cast<unsigned char>(r[0])) || r[0] == '_')) return false;
+    for (char c : r) {
+        if (!(asciiAlnum(static_cast<unsigned char>(c)) || c == '_' || c == '.')) return false;
+    }
+    return true;
+}
+
+/* Open Doctrines version 2 lets an assignment be written the way C would:
+ * `var.gold = 100`, `var.gold += 100`, `var.i++`, `++var.i`. The engine
+ * normalises all of them to a `set` line before doing anything else, and so
+ * does its linter and its block editor -- one normaliser, three callers. This
+ * is a fourth, and it has to agree with them or a script that the game runs
+ * one way is translated another.
+ *
+ * Deliberately a mirror rather than a shared implementation: this library
+ * carries no code from either game. See docs/scripting.md for what that costs
+ * and how the two are kept level. */
+std::string normaliseAssignment(const std::string& raw) {
+    std::string line = trim(raw);
+    if (line.empty()) return raw;
+
+    /* ++ref / --ref */
+    if (line.size() > 2 && (line.compare(0, 2, "++") == 0 || line.compare(0, 2, "--") == 0)) {
+        const std::string ref = line.substr(2);
+        if (looksLikeRef(ref)) return "set " + ref + (line[0] == '+' ? " += 1" : " -= 1");
+        return raw;
+    }
+    /* ref++ / ref-- */
+    if (line.size() > 2 && (line.compare(line.size() - 2, 2, "++") == 0 ||
+                            line.compare(line.size() - 2, 2, "--") == 0)) {
+        const std::string ref = line.substr(0, line.size() - 2);
+        if (looksLikeRef(ref)) {
+            return "set " + ref + (line[line.size() - 2] == '+' ? " += 1" : " -= 1");
+        }
+        return raw;
+    }
+
+    /* ref = expr, and the compound forms. `set` is optional on these. */
+    const size_t sp = line.find_first_of(" \t=+-*/");
+    if (sp == std::string::npos || sp == 0) return raw;
+    const std::string head = line.substr(0, sp);
+    if (!looksLikeRef(head)) return raw;
+    const size_t o = line.find_first_not_of(" \t", sp);
+    if (o == std::string::npos) return raw;
+    static const char* kOps[] = {"+=", "-=", "*=", "/=", "="};
+    for (const char* op : kOps) {
+        const size_t len = std::strlen(op);
+        if (line.compare(o, len, op) != 0) continue;
+        /* `==` is a comparison and belongs to a condition, not an assignment. */
+        if (op[0] == '=' && line.compare(o, 2, "==") == 0) return raw;
+        return "set " + head + " " + line.substr(o);
+    }
+    return raw;
+}
+
+/* Is this the whole of a value, or the beginning of a sum?
+ *
+ * `set var.gold = 100` is the version 1 line spelled differently and crosses
+ * unchanged. `set var.gold = var.x + 1` is arithmetic, and a GD5 event sets a
+ * variable rather than computing one, so it does not. Telling them apart is
+ * the difference between translating a script and inventing one. */
+bool isPlainValue(const std::vector<std::string>& rhs) {
+    if (rhs.empty()) return false;
+    if (rhs.size() == 1) return true;
+    /* A quoted string is one value however many spaces are inside it, and
+     * words() keeps the quotes on. */
+    return rhs.front().size() >= 2 && rhs.front().front() == '"' && rhs.back().back() == '"';
 }
 
 }  // namespace
@@ -80,10 +173,14 @@ static bool odScriptToEvents(const ScriptSource& src, const std::string& default
     current.fire_once = true;
 
     bool sawUnsupported = false;
+    /* What made it unsupported, for the report. Empty until something does. */
+    std::string unsupportedKind;
     int  stage = 0;
 
     for (const std::string& raw : splitLines(src.text)) {
-        const std::string line = trim(raw);
+        /* Normalised first, exactly as the engine does, so `var.gold = 100`
+         * and `set var.gold = 100` are one case here as they are there. */
+        const std::string line = normaliseAssignment(trim(raw));
         if (line.empty() || line[0] == '#') continue;
 
         const std::vector<std::string> w = words(line);
@@ -98,7 +195,22 @@ static bool odScriptToEvents(const ScriptSource& src, const std::string& default
         }
 
         if (opensBlock(head) || head == "else" || head == "endif" || head == "next"
-            || head == "endwhile" || head == "array" || head == "list") {
+            || head == "endwhile" || head == "elseif" || head == "catch"
+            || head == "endtry" || head == "array" || head == "list") {
+            if (unsupportedKind.empty()) {
+                unsupportedKind = (head == "array" || head == "list")
+                                      ? "collections (`" + head + "`)"
+                                      : "a `" + head + "` block";
+            }
+            sawUnsupported = true;
+            continue;
+        }
+
+        /* The rest of version 2's statements. None has a GD5 counterpart --
+         * its events are a gate and a list of actions, with no control flow to
+         * jump around inside -- so they are named and the script is carried. */
+        if (isVersion2Statement(head)) {
+            if (unsupportedKind.empty()) unsupportedKind = "`" + head + "`";
             sawUnsupported = true;
             continue;
         }
@@ -163,6 +275,37 @@ static bool odScriptToEvents(const ScriptSource& src, const std::string& default
         }
 
         if (head == "set" && w.size() >= 3) {
+            /* Version 2 puts an operator between the reference and the value.
+             * Reading past it is not a missing feature but a wrong answer: the
+             * third word used to be the value, and taking it now assigns the
+             * literal string "=" to the variable, with no warning, in a
+             * translation that otherwise looks like it worked. */
+            std::vector<std::string> v(w.begin(), w.end());
+            {
+                static const char* kCompound[] = {"+=", "-=", "*=", "/="};
+                bool compound = false;
+                for (const char* op : kCompound) {
+                    if (v[2] == op) { compound = true; break; }
+                }
+                if (compound) {
+                    /* A GD5 event sets a variable; it cannot fold one against
+                     * what is already there. */
+                    unsupportedKind = "compound assignment (" + v[2] + ")";
+                    sawUnsupported = true;
+                    continue;
+                }
+                if (v[2] == "=") {
+                    const std::vector<std::string> rhs(v.begin() + 3, v.end());
+                    if (!isPlainValue(rhs)) {
+                        unsupportedKind = "an arithmetic assignment";
+                        sawUnsupported = true;
+                        continue;
+                    }
+                    /* Drop the operator and the line is the version 1 form. */
+                    v.erase(v.begin() + 2);
+                }
+            }
+            const std::vector<std::string>& w = v;
             const std::vector<std::string> lhs = dotted(w[1]);
             Action a;
             if (lhs.size() == 3 && lhs[0] == "country") {
@@ -211,6 +354,7 @@ static bool odScriptToEvents(const ScriptSource& src, const std::string& default
             continue;
         }
 
+        if (unsupportedKind.empty()) unsupportedKind = "`" + head + "`";
         sawUnsupported = true;
     }
 
@@ -218,9 +362,10 @@ static bool odScriptToEvents(const ScriptSource& src, const std::string& default
 
     if (sawUnsupported) {
         report.warn("script.unsupported",
-                    src.name + " uses loops, conditionals or collections, which GD5's event "
-                               "system cannot express; it was not translated and is carried "
-                               "unchanged in the sidecar instead");
+                    src.name + " uses " +
+                        (unsupportedKind.empty() ? std::string("something") : unsupportedKind) +
+                        ", which GD5's event system cannot express; it was not translated and "
+                        "is carried unchanged in the sidecar instead");
         return false;
     }
 
@@ -451,7 +596,12 @@ void eventsFromGd5(const Json& raw, const std::string& owner, std::vector<Event>
 /* ------------------------------------- events -> Open Doctrines script text */
 
 std::string eventToOdScript(const Event& e, Report& report) {
-    std::string out = "#OD/MapEngine/1\n";
+    /* The engine version a generated script declares. Only version 1 syntax is
+ * written -- `waitUntil` and `set ref value`, which version 2 still accepts --
+ * but declaring 1 asks the game to run it under a dialect the game is moving
+ * away from, and a script the block editor may reopen should not be pinned to
+ * the old one. */
+    std::string out = "#OD/MapEngine/2\n";
     out += "# " + e.name + "\n";
     out += "# Translated from a Greater Diplomacy 5 scripted event owned by " + e.owner + ".\n";
 

@@ -44,11 +44,45 @@ The event's owner is inferred from the `set country.X.…` lines it contains.
 | `set var.NAME V` | `Set Variable` |
 | `set country.X.name "…"` | `Edit Name` |
 
+### Engine version 2
+
+Open Doctrines' engine version 2 lets an assignment be written the way C would,
+and the game normalises every spelling to a `set` line before doing anything
+else — one normaliser shared by its engine, its linter and its block editor.
+This library mirrors that normaliser, so all four of these are the same line:
+
+```
+set var.gold = 100
+set var.gold 100          # version 1, still accepted
+var.gold = 100
+```
+
+The mirror is deliberate and it has a cost: dragoman carries no code from
+either game, so the two implementations can drift. `test_scripts.cpp` pins the
+behaviour that matters — the spellings must reach the same action — and the
+statement list below is kept in the engine's own order so the two are easy to
+compare when it gains another.
+
+The compound forms (`+=`, `-=`, `*=`, `/=`, and therefore `x++` and `x--`) are
+**not** translated. A GD5 event sets a variable; it cannot fold one against
+what is already there. Nor is an arithmetic right-hand side: `set var.gold =
+var.x + 1` is refused rather than approximated.
+
 **Not translated**, reported as `script.unsupported` and carried verbatim:
-`foreach`, `while`, `if`/`else`, `array`, `list`. GD5's event system has no
-control flow, so a loop over a country's provinces has no honest rendering as
-an event, and guessing one would silently change what the map does. `include`
-is reported as `script.include`: the library is carried but not inlined.
+
+- control flow and collections — `if`/`else`/`elseif`, `foreach`, `while`,
+  `for`, `repeat`, `unless`, `try`/`catch`/`endtry`, `array`, `list`
+- version 2's other statements — `break`, `continue`, `print`, `label`,
+  `jump`, `spawn`, `stop`, `dialog`
+- compound and arithmetic assignment, as above
+
+GD5's event system has no control flow, so a loop over a country's provinces
+has no honest rendering as an event, and guessing one would silently change
+what the map does. The report **names the construct it found**, because a
+script refused for a `label` should not be described as using a loop.
+
+`include` is reported as `script.include`: the library is carried but not
+inlined.
 
 `set country.X.treasury`, `set province.N.population` and `set map.date` have no
 GD5 action; they are reported as `script.action` and left out of the event they
@@ -85,7 +119,7 @@ it; the GD5 side only has to carry it.
 
 ## Libraries
 
-A file whose first non-blank line is `#OD/MapEngine/1` is an entry point and
+A file whose first non-blank line is `#OD/MapEngine/N` is an entry point and
 runs on load. A file without it is a library, only ever reached through
 `include`. Dragoman never translates a library into an event: doing so would
 start running code that was only meant to be included.
@@ -94,7 +128,7 @@ start running code that was only meant to be included.
 
 | Code | Meaning |
 |---|---|
-| `script.unsupported` | control flow or collections; the script was not translated |
+| `script.unsupported` | a construct GD5 cannot express, named in the message; the script was not translated |
 | `script.include` | an `include` was carried but not inlined |
 | `script.condition` | a condition with no counterpart on the other side |
 | `script.action` | an action with no counterpart; written as a comment |

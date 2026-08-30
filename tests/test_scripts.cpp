@@ -106,8 +106,11 @@ static void testGd5EventsBecomeScripts() {
     const std::string& text = scripts[0].text;
     CHECK(scripts[0].entrypoint);
     /* The header is what makes Open Doctrines run a file at all; without it
-     * the script is a library that never executes. */
-    CHECK(startsWith(text, "#OD/MapEngine/1"));
+     * the script is a library that never executes. Version 2 since 0.4.1: the
+     * generated body is still version 1 syntax, which version 2 accepts, but
+     * declaring 1 pins a script the block editor may reopen to a dialect the
+     * game is moving away from. */
+    CHECK(startsWith(text, "#OD/MapEngine/2"));
     CHECK(text.find("waitUntil map.turn >= 24") != std::string::npos);
     CHECK(text.find("set country.GER.at_war_with RUS true") != std::string::npos);
 }
@@ -199,6 +202,129 @@ static void testLibrariesAreNotEntryPoints() {
     CHECK(events.empty());
 }
 
+
+/* ------------------------------------------------- engine version 2 */
+
+/* Helper: translate one script and hand back the actions and the report. */
+static void translateOne(const char* text, std::vector<Event>& events, Report& report) {
+    std::vector<ScriptSource> scripts{script("v2.txt", text)};
+    scriptsToEvents(scripts, "GER", events, report);
+}
+
+static const Action* firstAction(const std::vector<Event>& events) {
+    for (const auto& e : events) {
+        if (!e.actions.empty()) return &e.actions.front();
+    }
+    return nullptr;
+}
+
+/* Version 2 puts an operator between the reference and the value. Reading past
+ * it was not a missing feature but a wrong answer: `set var.gold = 100` set the
+ * variable to the literal string "=", silently, in a translation that
+ * otherwise looked like it had worked. */
+static void testAssignmentOperatorIsNotMistakenForTheValue() {
+    Report report;
+    std::vector<Event> events;
+    translateOne("waitUntil map.turn >= 3\nset var.gold = 100\n", events, report);
+
+    const Action* a = firstAction(events);
+    REQUIRE(a != nullptr);
+    CHECK_EQ(a->kind, std::string("set_var"));
+    CHECK_EQ(a->target, std::string("gold"));
+    CHECK_EQ(a->message, std::string("100"));
+}
+
+/* The same line written the way version 2 lets you write it. The engine
+ * normalises this to a `set` before doing anything else and so does this
+ * library, so the two forms have to reach the same place. */
+static void testBareAssignmentIsTheSameAsSet() {
+    Report withSet, without;
+    std::vector<Event> a, b;
+    translateOne("waitUntil map.turn >= 3\nset var.gold = 100\n", a, withSet);
+    translateOne("waitUntil map.turn >= 3\nvar.gold = 100\n", b, without);
+
+    const Action* x = firstAction(a);
+    const Action* y = firstAction(b);
+    REQUIRE(x != nullptr);
+    REQUIRE(y != nullptr);
+    CHECK_EQ(x->kind, y->kind);
+    CHECK_EQ(x->target, y->target);
+    CHECK_EQ(x->message, y->message);
+}
+
+/* A quoted value survives the operator, spaces and all. */
+static void testQuotedValueCrossesWithAnOperator() {
+    Report report;
+    std::vector<Event> events;
+    translateOne("waitUntil map.turn >= 3\nset country.GER.name = \"German Empire\"\n",
+                 events, report);
+    const Action* a = firstAction(events);
+    REQUIRE(a != nullptr);
+    CHECK_EQ(a->kind, std::string("edit_name"));
+    CHECK_EQ(a->message, std::string("German Empire"));
+}
+
+/* What GD5 cannot express is refused, and refused BY NAME. A report that says
+ * "loops, conditionals or collections" when the script used `label` sends the
+ * reader looking for a loop that is not there. */
+static void testVersion2ConstructsAreRefusedByName() {
+    struct Case { const char* line; const char* mentions; };
+    const Case cases[] = {
+        {"set var.gold += 100",      "compound assignment"},
+        {"var.gold++",               "compound assignment"},
+        {"set var.gold = var.x + 1", "arithmetic"},
+        {"label start",              "label"},
+        {"jump start",               "jump"},
+        {"dialog bob \"hello\"",     "dialog"},
+        {"print \"hi\"",             "print"},
+        {"try",                      "try"},
+        {"for i 1 10",               "for"},
+        {"unless var.x == 1",        "unless"},
+    };
+
+    for (const auto& c : cases) {
+        Report report;
+        std::vector<Event> events;
+        const std::string text = std::string("waitUntil map.turn >= 3\n") + c.line + "\n";
+        translateOne(text.c_str(), events, report);
+
+        /* Nothing is translated: a script that is refused is refused whole. */
+        CHECK(events.empty());
+
+        bool named = false;
+        for (const auto& e : report.entries()) {
+            if (e.message.find(c.mentions) != std::string::npos) named = true;
+        }
+        CHECK(named);
+        if (!named) {
+            std::fprintf(stderr, "       %s was not named in the report\n", c.line);
+            for (const auto& e : report.entries()) {
+                std::fprintf(stderr, "         got: %s\n", e.message.c_str());
+            }
+        }
+    }
+}
+
+/* A generated script declares the engine it is meant for. */
+static void testGeneratedScriptsDeclareVersion2() {
+    Event e;
+    e.name = "test";
+    e.owner = "GER";
+    Condition c;
+    c.kind = "turn";
+    c.op = ">=";
+    c.value = "5";
+    c.chain = "AND";
+    e.conditions.push_back(c);
+
+    Report report;
+    std::vector<Event> events{e};
+    std::vector<ScriptSource> scripts;
+    eventsToScripts(events, scripts, report);
+    REQUIRE(scripts.size() == 1);
+    CHECK(scripts[0].text.rfind("#OD/MapEngine/2", 0) == 0);
+}
+
 int main() {
     testStagesBecomeEvents();
     testEventsBecomeGd5Json();
@@ -207,5 +333,10 @@ int main() {
     testNonAndChainIsReported();
     testUnsupportedActionBecomesAComment();
     testLibrariesAreNotEntryPoints();
+    testAssignmentOperatorIsNotMistakenForTheValue();
+    testBareAssignmentIsTheSameAsSet();
+    testQuotedValueCrossesWithAnOperator();
+    testVersion2ConstructsAreRefusedByName();
+    testGeneratedScriptsDeclareVersion2();
     return check::finish("test_scripts");
 }
