@@ -112,6 +112,7 @@ Json worldToJson(const World& w) {
         o["leader_name"] = n.leader_name;
         o["leader_title"] = n.leader_title;
         o["playable"] = n.playable;
+        if (n.has_political_axis) o["political_axis"] = n.political_axis;
         if (!n.flag_name.empty()) o["flag"] = n.flag_name;
         o["flag_bytes"] = static_cast<uint64_t>(n.flag_bytes.size());
         if (!n.claims.empty()) o["claims"] = n.claims;
@@ -237,6 +238,10 @@ bool worldFromJson(const Json& j, World& w, Report& report) {
             n.leader_name = o.value("leader_name", std::string());
             n.leader_title = o.value("leader_title", std::string());
             n.playable = o.value("playable", true);
+            if (o.contains("political_axis")) {
+                n.political_axis = o.value("political_axis", 0.0);
+                n.has_political_axis = true;
+            }
             n.flag_name = o.value("flag", std::string());
             if (o.contains("claims") && o["claims"].is_array()) {
                 for (const auto& c : o["claims"]) n.claims.push_back(c.get<int64_t>());

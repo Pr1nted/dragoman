@@ -19,6 +19,8 @@ namespace dragoman {
 
 namespace {
 
+
+
 /* Men per point of GD5 unit health. Open Doctrines counts an army in people
  * -- 1174826 of them in one province of the 1914 map -- and GD5 counts a
  * division in hit points, 1200 for the infantry of the same year. The ratio
@@ -139,7 +141,18 @@ bool readOdMap(const std::string& path, const Options& opt, World& world, Report
                 if (!known) extra[f.key()] = f.value();
             }
             if (countryCompass.is_object() && countryCompass.contains(n.key)) {
-                extra["country_compass"] = countryCompass[n.key];
+                /* Carried whole, because the economic axis has no counterpart
+                 * anywhere in GD5 and must come back untouched. The
+                 * authoritarian axis is ALSO lifted into the model, where the
+                 * other game has a field for it -- so this one value is both
+                 * carried and mapped, and the writer below takes it from the
+                 * model rather than from here. */
+                const Json& comp = countryCompass[n.key];
+                extra["country_compass"] = comp;
+                if (comp.is_object() && comp.contains("auth") && comp["auth"].is_number()) {
+                    n.political_axis = comp["auth"].get<double>();
+                    n.has_political_axis = true;
+                }
             }
             /* research.json: the field that lets GD5's research mean something
              * on this side. See docs/research.md -- the game does not read it
@@ -495,12 +508,52 @@ bool writeOdMap(const std::string& path, const World& world, const Options& opt,
         const auto extraIt = n.extra.find("od");
         if (extraIt != n.extra.end() && extraIt->is_object()) {
             for (auto f = extraIt->begin(); f != extraIt->end(); ++f) {
-                if (f.key() == "country_compass") { countryCompass[n.key] = f.value(); continue; }
+                if (f.key() == "country_compass") {
+                    /* The carried pair is the starting point -- it is the only
+                     * source for `left` -- and the modelled axis overwrites
+                     * `auth`, so a value the other game changed is what lands
+                     * here rather than the one the map set out with. */
+                    Json comp = f.value();
+                    if (n.has_political_axis) {
+                        if (!comp.is_object()) comp = Json::object();
+                        /* PRECISION, and why the carried value can still win.
+                         *
+                         * GD5's axis is a tenth as fine as this one, so a map
+                         * that goes out at auth 89 arrives there as 9 and would
+                         * come home as 90 -- a country whose politics drift
+                         * every time it crosses, which is exactly what the
+                         * round-trip test forbids.
+                         *
+                         * So: if the axis still says what this map's own value
+                         * would have said over there, nothing changed in GD5
+                         * and the exact original is restored. If it says
+                         * anything else, somebody moved it and their value is
+                         * the true one. Same rule as the forts. */
+                        const bool hadAuth = comp.contains("auth") && comp["auth"].is_number();
+                        const double original = hadAuth ? comp["auth"].get<double>() : 0.0;
+                        const bool unchanged =
+                            hadAuth && gd5PoliticalValueFromAxis(original)
+                                           == gd5PoliticalValueFromAxis(n.political_axis);
+                        comp["auth"] = unchanged ? odAuthFromAxis(original)
+                                                 : odAuthFromAxis(n.political_axis);
+                    }
+                    countryCompass[n.key] = comp;
+                    continue;
+                }
                 if (f.key() == "starting_policies") { startingPolicies[n.key] = f.value(); continue; }
                 if (f.key() == "research") { researchNodes[n.key] = f.value(); continue; }
                 c[f.key()] = f.value();
             }
         }
+        /* A map that crossed FROM GD5 has an axis and no carried compass, so
+         * without this the value would be read on one side and written
+         * nowhere. `left` is centred because GD5 has no economic axis to have
+         * an opinion about -- inventing one would be worse than admitting to
+         * none. */
+        if (n.has_political_axis && !countryCompass.contains(n.key)) {
+            countryCompass[n.key] = Json{{"left", 0}, {"auth", odAuthFromAxis(n.political_axis)}};
+        }
+
         countries[std::to_string(id)] = c;
 
         Json rel = Json::object();
@@ -766,6 +819,28 @@ bool writeOdMap(const std::string& path, const World& world, const Options& opt,
      * Translated faithfully, that zero is still zero, and the first simulated
      * turn bankrupts the entire world. Saying so is the honest thing; picking
      * a number out of the air and calling it a translation is not. */
+    /* The mirror of the note the GD5 writer makes. GD5's five domestic policy
+     * cards are not any of Open Doctrines' fifty-nine doctrines -- different
+     * names, different requirements, different effects -- so they are carried
+     * rather than guessed at, and a player is told so once. */
+    long withPolicies = 0;
+    for (const auto& n : world.nations) {
+        const auto gd5 = n.extra.find("gd5");
+        if (gd5 != n.extra.end() && gd5->is_object() && gd5->contains("domestic_policies")
+            && (*gd5)["domestic_policies"].is_object()
+            && !(*gd5)["domestic_policies"].empty()) {
+            ++withPolicies;
+        }
+    }
+    if (withPolicies > 0) {
+        report.warn("od.policies",
+                    std::to_string(withPolicies) +
+                        " nation(s) have GD5 domestic policies, which are a different set from "
+                        "Open Doctrines' doctrines and are not written as them. They are carried "
+                        "in the sidecar and return intact; the political axis both are gated on "
+                        "does cross");
+    }
+
     long funded = 0;
     for (const auto& n : world.nations) {
         if (n.treasury > 0.0) ++funded;

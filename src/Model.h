@@ -114,6 +114,24 @@ struct Nation {
 
     bool playable = true;
 
+    /* Where the country sits on the one axis both games have: NEGATIVE is
+     * libertarian, POSITIVE authoritarian, and the scale is Open Doctrines'
+     * -100..+100 because it is the finer of the two.
+     *
+     * THE SIGN IS NOT OBVIOUS and getting it backwards is silent. Open
+     * Doctrines' compass FILE stores `auth`, positive for authoritarian, which
+     * is what this is; its in-memory PoliticalCompass stores `social`, which is
+     * the NEGATION of that, and its loader flips both axes on the way in. This
+     * library only ever sees the file. Greater Diplomacy 5's `political_value`
+     * agrees with the file's sign and runs -10..+10, so it is this divided by
+     * ten. See docs/mapping.md.
+     *
+     * has_political_axis distinguishes "centrist" from "the map did not say",
+     * which matters because zero is a legitimate position in both games and
+     * both of them default to it. */
+    double political_axis = 0.0;
+    bool   has_political_axis = false;
+
     std::map<std::string, Relation> relations;
     std::vector<int64_t>            claims;
 

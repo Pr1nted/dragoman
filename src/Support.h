@@ -106,6 +106,21 @@ std::string formatHexColor(uint32_t rgb);
 std::string          base64Encode(const std::vector<uint8_t>& data);
 std::vector<uint8_t> base64Decode(const std::string& text);
 
+/* ------------------------------------------------- the political axis
+ *
+ * The one axis both games have. NEGATIVE is libertarian and POSITIVE
+ * authoritarian on both sides, so converting between them is a change of
+ * scale and not of meaning: Greater Diplomacy 5's `political_value` runs
+ * -10..+10, Open Doctrines' compass file stores `auth` over -100..+100, and
+ * the model keeps the finer of the two.
+ *
+ * Both directions live here rather than beside their readers because they are
+ * one decision. Written twice they can disagree, and a disagreement between
+ * them is a map that changes its politics slightly every time it crosses. */
+int    gd5PoliticalValueFromAxis(double axis);   /* -100..100 -> -10..10 */
+double axisFromGd5PoliticalValue(double value);  /* -10..10 -> -100..100 */
+int    odAuthFromAxis(double axis);              /* -100..100, to a whole number */
+
 /* The thread-local error the C ABI reports through dg_last_error(). */
 void        setLastError(const std::string& message);
 const char* lastError();

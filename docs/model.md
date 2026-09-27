@@ -55,6 +55,12 @@ change meaning without `DRAGOMAN_ABI_VERSION` moving.
     "treasury": 57.21,
     "leader_name": "", "leader_title": "",
     "playable": true,
+    "political_axis": 70,               // -100 libertarian .. +100 authoritarian;
+                                       // omitted when the map did not say. The
+                                       // SIGN follows Open Doctrines' compass
+                                       // FILE and GD5's political_value, not
+                                       // Open Doctrines' in-memory compass,
+                                       // which is their negation. See mapping.md
     "flag": "flags/AUH.png",
     "flag_bytes": 510,                // size only; the bytes stay in the library
     "claims": [1005, 1006],

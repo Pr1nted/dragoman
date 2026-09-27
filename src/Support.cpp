@@ -219,4 +219,21 @@ static thread_local std::string g_lastError;
 void setLastError(const std::string& message) { g_lastError = message; }
 const char* lastError() { return g_lastError.c_str(); }
 
+namespace {
+double clampTo(double v, double lo, double hi) { return v < lo ? lo : (v > hi ? hi : v); }
+int roundHalfAway(double v) { return static_cast<int>(v < 0 ? v - 0.5 : v + 0.5); }
+}  // namespace
+
+int gd5PoliticalValueFromAxis(double axis) {
+    return roundHalfAway(clampTo(axis / 10.0, -10.0, 10.0));
+}
+
+double axisFromGd5PoliticalValue(double value) {
+    return clampTo(value, -10.0, 10.0) * 10.0;
+}
+
+int odAuthFromAxis(double axis) {
+    return roundHalfAway(clampTo(axis, -100.0, 100.0));
+}
+
 }  // namespace dragoman

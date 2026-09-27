@@ -166,7 +166,12 @@ left inside the landmass — the same invariant Open Doctrines' own maps hold.
 | leader, adjective | — | `leader_name`, `leader_title`, `adjective` | carried |
 | flag | a PNG path into the archive | raw 60x40 pixels, base64, in `flag_data` | mapped, see below |
 | alliance / war | `relations.json` | `allied_with`, `at_war_with` | mapped |
-| non-aggression, guarantee | `relations.json` | — | carried |
+| guarantee | `relations.json` | `guarantees` (a list on the guarantor) | mapped |
+| truce | `relations.json` | `truces` (a countdown) | mapped; the turns left are carried |
+| non-aggression | `relations.json` | — | carried |
+| political axis | `country_compass.json` `auth` | `political_value` | mapped, scaled 10:1 |
+| economic axis | `country_compass.json` `left` | — | carried |
+| policies | `starting_policies.json` | `domestic_policies` | carried, both ways — see below |
 | research | — (compiled into the game) | `research` per nation | **derived from the date**, see below |
 | faction, manpower, fuel | — | `faction`, `manpower`, `fuel` | carried |
 
@@ -255,6 +260,45 @@ same code; without the check the second overwrote the first.
 provinces of its 1914 map to a nation whose ISO code is `UNC` and whose name is,
 exactly, "Unclaimed". GD5 spells the same idea `"Unclaimed"` in `nation_data`.
 They map onto each other; neither is treated as "no owner".
+
+
+### The political axis, and why the sign is worth checking twice
+
+Both games put a country on one authoritarian-to-libertarian line, so it
+crosses. Two things make it easy to get backwards.
+
+**The scale.** GD5's `political_value` runs -10..+10; Open Doctrines' compass
+file stores `auth` over -100..+100. A factor of ten, and the model keeps the
+finer of the two.
+
+**The sign.** Positive is *authoritarian* in GD5's field and in Open Doctrines'
+**file**. It is *libertarian* in Open Doctrines' in-memory `PoliticalCompass`,
+whose loader negates both axes on the way in — that game once shipped without
+the negation and loaded the Soviet Union as hard right, unable to enact land
+reform and free to privatise. This library only ever reads the file, so no flip
+belongs here. `test_politics.cpp` pins it.
+
+GD5 has no economic axis, so `left` is carried untouched and a country arriving
+from GD5 is written at `left: 0` rather than having an economic position
+invented for it.
+
+Because GD5's scale is coarser, an `auth` of 89 becomes a `political_value` of
+9. Coming home, the exact 89 is restored **unless** the value actually moved in
+GD5 — the sidecar remembers what the map set out with, and the map wins only
+when it disagrees. Same rule as the forts.
+
+### Policies are carried, not matched
+
+Both games have them, and they are not the same thing. GD5 offers five domestic
+policy cards gated on its axis; Open Doctrines has fifty-nine doctrines gated on
+two axes, with costs, implementation times and compass shifts GD5 has no field
+for. No card names, requires or does what any doctrine does.
+
+Pairing them by what they sound like — "Total Mobilisation" against "Total
+Mobilisation Economy" — would be inventing a government's programme out of a
+resemblance. So each side's are carried in the sidecar and return intact, and a
+conversion says so once (`gd5.policies`, `od.policies`). The axis they are both
+gated on does cross, so a country at least arrives facing the right menu.
 
 ## The map itself
 

@@ -98,7 +98,9 @@ packs with miniz. Every file *inside* is preserved exactly.
 | Sea provinces | — (**synthesised** for GD5) | ✅ |
 | Population, ports | ✅ | — (carried) |
 | Fortification | ✅ 0–5 | ✅ `Fort Lvl N`, 1–20 (**scaled** ×4) |
-| Minorities, political compass, policies | ✅ | — (carried) |
+| Political axis | ✅ `auth`, −100..100 | ✅ `political_value`, −10..10 (**scaled** 10:1) |
+| Guarantees, truces | ✅ | ✅ |
+| Minorities, economic axis, policies | ✅ | — (carried) |
 | Terrain, adjacency, province centres | — (**derived** from the raster) | ✅ |
 | Units, buildings, research, factions | — (armies carried) | ✅ |
 | Flags | a PNG in the archive | raw 60x40 pixels, base64 |

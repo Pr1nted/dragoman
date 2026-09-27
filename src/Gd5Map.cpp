@@ -32,6 +32,12 @@ namespace {
 
 constexpr double kMenPerHealth = 1000.0;
 
+/* data/constants.py: DEFAULT_TRUCE_TURNS. Only used for a truce that Open
+ * Doctrines asserts and GD5 has never seen, which has no counter of its own to
+ * keep -- an existing one keeps the number of turns the map arrived with. */
+constexpr int kTruceTurnsDefault = 12;
+
+
 /* FORTS.
  *
  * Both games now have one, which they did not when this library was written:
@@ -535,6 +541,30 @@ bool readGd5Map(const std::string& dir, const Options& opt, World& world, Report
                     if (t.is_string()) n.relations[t.get<std::string>()].ally = true;
                 }
             }
+            /* A guarantee belongs to the guarantor -- GD5 keeps a list on
+             * the promising nation, and Open Doctrines records it the same way
+             * round -- so this needs no pairing up. */
+            if (nd.contains("guarantees") && nd["guarantees"].is_array()) {
+                for (const auto& t : nd["guarantees"]) {
+                    if (t.is_string()) n.relations[t.get<std::string>()].guarantee = true;
+                }
+            }
+            /* A truce is a countdown here and a fact in Open Doctrines, which
+             * has nowhere to put the number of turns left. The fact crosses and
+             * the countdown rides in the sidecar, so a truce does not come home
+             * having silently restarted. */
+            if (nd.contains("truces") && nd["truces"].is_object()) {
+                for (auto t = nd["truces"].begin(); t != nd["truces"].end(); ++t) {
+                    n.relations[t.key()].truce = true;
+                }
+            }
+            /* The one axis both games have. GD5 runs -10..+10 and Open
+             * Doctrines' file -100..+100, same sign, so this is a tenfold
+             * difference of scale and nothing more. */
+            if (nd.contains("political_value") && nd["political_value"].is_number()) {
+                n.political_axis = axisFromGd5PoliticalValue(nd["political_value"].get<double>());
+                n.has_political_axis = true;
+            }
             if (nd.contains("claims") && nd["claims"].is_array()) {
                 for (const auto& c : nd["claims"]) {
                     if (c.is_number_integer()) n.claims.push_back(c.get<int64_t>());
@@ -549,7 +579,12 @@ bool readGd5Map(const std::string& dir, const Options& opt, World& world, Report
                 static const char* handled[] = {"adjective", "color", "leader_name",
                                                 "leader_title", "is_playable", "materials",
                                                 "flag_data", "at_war_with", "allied_with",
-                                                "claims", "scripted_events"};
+                                                "claims", "scripted_events",
+                                                "guarantees", "political_value"};
+                /* `truces` is deliberately NOT here. Its turn counts are the
+                 * half of it this library cannot model, so the whole mapping is
+                 * carried and the writer below merges the modelled fact into
+                 * it rather than replacing it. */
                 bool known = false;
                 for (const char* k : handled) known = known || f.key() == k;
                 if (!known) extra[f.key()] = f.value();
@@ -1150,19 +1185,31 @@ bool writeGd5Map(const std::string& dir, const World& world, const Options& opt,
             }
         }
 
-        Json atWar = Json::array(), allied = Json::array();
+        Json atWar = Json::array(), allied = Json::array(), guarantees = Json::array();
+        /* The truces this map arrived with, so a countdown already running is
+         * not restarted by a trip through Open Doctrines, which has no field
+         * for how many turns are left. */
+        Json truces = nd.contains("truces") && nd["truces"].is_object()
+                          ? nd["truces"] : Json::object();
         for (const auto& kv : n.relations) {
             const std::string other = nameOf(kv.first);
             if (other.empty()) continue;
             if (kv.second.at_war) atWar.push_back(other);
             if (kv.second.ally) allied.push_back(other);
+            if (kv.second.guarantee) guarantees.push_back(other);
+            if (kv.second.truce) {
+                if (!truces.contains(other)) truces[other] = kTruceTurnsDefault;
+            } else {
+                truces.erase(other);
+            }
         }
         nd["at_war_with"] = atWar;
         nd["allied_with"] = allied;
+        nd["guarantees"] = guarantees;
+        nd["truces"] = truces;
         nd["claims"] = n.claims;
+        if (n.has_political_axis) nd["political_value"] = gd5PoliticalValueFromAxis(n.political_axis);
 
-        /* Open Doctrines' non-aggression pacts and guarantees have no GD5
-         * equivalent; saying so once per map is more use than once per pair. */
         nd["scripted_events"] = Json::array();
         nationData[name] = nd;
     }
@@ -1171,16 +1218,45 @@ bool writeGd5Map(const std::string& dir, const World& world, const Options& opt,
         eventsToGd5(world.events, keyToName, nationData, report);
     }
 
+    /* Guarantees cross now -- GD5 gained them -- so only the non-aggression
+     * pact is left without a counterpart. A truce is the nearest thing GD5 has
+     * and it is not the same thing: a truce expires on a counter and a pact
+     * does not, so writing one as the other would invent an end date. */
+    /* POLICIES. Both games now have them and they are not the same set: GD5
+     * offers five cards gated on its axis, Open Doctrines fifty-nine doctrines
+     * gated on two, and no card names, requires or does what any doctrine does.
+     * Matching them by what they sound like would be inventing a government's
+     * programme, so each side's are carried and neither is written as the
+     * other. The axis they are both gated on DOES cross, so the menu a country
+     * is offered on arrival is at least the right menu. */
+    long withPolicies = 0;
+    for (const auto& n : world.nations) {
+        const auto od = n.extra.find("od");
+        if (od != n.extra.end() && od->is_object() && od->contains("starting_policies")
+            && (*od)["starting_policies"].is_array() && !(*od)["starting_policies"].empty()) {
+            ++withPolicies;
+        }
+    }
+    if (withPolicies > 0) {
+        report.warn("gd5.policies",
+                    std::to_string(withPolicies) +
+                        " nation(s) have Open Doctrines doctrines, which are a different set "
+                        "from GD5's domestic policies and are not written as them. They are "
+                        "carried in the sidecar and return intact; the political axis both are "
+                        "gated on does cross");
+    }
+
     bool droppedPacts = false;
     for (const auto& n : world.nations) {
         for (const auto& kv : n.relations) {
-            if (kv.second.non_aggression || kv.second.guarantee) droppedPacts = true;
+            if (kv.second.non_aggression) droppedPacts = true;
         }
     }
     if (droppedPacts) {
         report.warn("gd5.relations",
-                    "non-aggression pacts and guarantees have no GD5 counterpart and were not "
-                    "written into the map; they are preserved in the sidecar and return intact");
+                    "non-aggression pacts have no GD5 counterpart and were not written into the "
+                    "map; a truce expires and a pact does not, so one is not written as the "
+                    "other. They are preserved in the sidecar and return intact");
     }
 
     /* ---- research ----

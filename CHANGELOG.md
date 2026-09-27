@@ -4,6 +4,53 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [semver](https://semver.org/), with a separate ABI version — see
 [docs/versioning.md](docs/versioning.md).
 
+## 0.5.0 — 2026-09-27
+
+Greater Diplomacy 5 gained domestic politics and guarantees. Three more things
+cross because of it, and one deliberately does not.
+
+### Added
+
+- **The political axis.** Both games put a country on one
+  authoritarian-to-libertarian line, so it now crosses: GD5's `political_value`
+  and the `auth` figure in Open Doctrines' compass file.
+
+  The scales differ by ten and the model keeps the finer. Because GD5's is
+  coarser, an `auth` of 89 arrives there as 9 — and comes home as 89 again
+  unless the value actually moved in GD5, in which case the map wins. Same rule
+  as the forts.
+
+  **The sign is worth checking before touching this.** Positive is
+  authoritarian in GD5's field and in Open Doctrines' compass *file*; it is
+  libertarian in that game's in-memory compass, whose loader negates both axes
+  on the way in. This library reads the file, so no flip belongs here.
+  `test_politics.cpp` pins it, and fails if it is inverted.
+
+  GD5 has no economic axis, so `left` is carried untouched, and a country
+  arriving from GD5 is written centrist there rather than having an economic
+  position invented for it.
+
+- **Guarantees.** A guarantee belongs to the guarantor on both sides — GD5
+  keeps a list on the promising nation and Open Doctrines records it the same
+  way round — so it crosses without needing to be paired up.
+
+- **Truces.** The fact crosses; the number of turns left rides in the sidecar,
+  because Open Doctrines has nowhere to put a countdown. A truce that goes out
+  with five turns left comes home with five, not with a fresh twelve.
+
+### Not translated, on purpose
+
+- **Policies.** Both games have them and they are not the same set: five GD5
+  domestic policy cards against fifty-nine Open Doctrines doctrines, sharing no
+  name, requirement or effect. Pairing them by resemblance would be inventing a
+  government's programme, so each side's are carried and a conversion says so
+  once (`gd5.policies`, `od.policies`). The axis they are both gated on does
+  cross, so a country arrives facing the right menu.
+
+- **Non-aggression pacts.** Still no counterpart. A truce is the nearest thing
+  GD5 has and it is not the same: a truce expires on a counter and a pact does
+  not, so writing one as the other would invent an end date.
+
 ## 0.4.1 — 2026-08-30
 
 ### Fixed
