@@ -2,7 +2,7 @@
     .name = .dragoman,
     .version = "0.5.0",
     .minimum_zig_version = "0.15.0",
-    .fingerprint = 0x9d7e3c1a5b842f60,
+    .fingerprint = 0x57686e173bb6943c,
     .paths = .{
         "build.zig",
         "build.zig.zon",
