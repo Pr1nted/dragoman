@@ -245,10 +245,59 @@ static void testAFortBuiltInGd5SurvivesComingHome() {
     CHECK_EQ(p->fortification, 4);
 }
 
+
+/* A GD5 fort comes home the level it set out as -- the direction the tests
+ * above do NOT cover.
+ *
+ * Every other test here runs Open Doctrines -> GD5 -> Open Doctrines, which is
+ * exact by construction: the level is multiplied by four and divided by four.
+ * The other way round is not. GD5 has twenty levels and Open Doctrines five, so
+ * Fort Lvl 5 arrives as level 2 and, scaled back, returns as Lvl 8 -- a fort
+ * that grows a little every time the map crosses.
+ *
+ * Five of Greater Diplomacy's own shipped maps failed conformance on this, and
+ * no unit test saw it, because every one of them tested the easy direction.
+ */
+static void testAGd5FortLevelSurvivesTheReturnTrip() {
+    const int levels[] = {1, 2, 3, 5, 7, 10, 13, 17, 19, 20};
+
+    for (int level : levels) {
+        World w = fixture::makeWorld();
+        for (auto& p : w.provinces) p.fortification = 0;
+
+        Options opt;
+        Report report;
+        const std::string gd5 = fixture::scratch("gd5fort-return-" + std::to_string(level));
+        fs::remove_all(gd5);
+        REQUIRE(writeGd5Map(gd5, w, opt, report));
+        placeFortOnDisk(gd5, 2, level, true);
+
+        /* Out to Open Doctrines... */
+        World crossing;
+        Report r2;
+        REQUIRE(readGd5Map(gd5, opt, crossing, r2));
+        const std::string odmap = fixture::scratch("gd5fort-return-" + std::to_string(level)
+                                                   + ".odmap");
+        REQUIRE(writeOdMap(odmap, crossing, opt, r2));
+
+        /* ...and home again. */
+        World home;
+        Report r3;
+        REQUIRE(readOdMap(odmap, opt, home, r3));
+        const std::string back = fixture::scratch("gd5fort-return-" + std::to_string(level)
+                                                  + "-back");
+        fs::remove_all(back);
+        REQUIRE(writeGd5Map(back, home, opt, r3));
+
+        CHECK_EQ(fortInWrittenMap(back, 2), level);
+    }
+}
+
 int main() {
     testEveryOdLevelSurvivesTheRoundTrip();
     testGd5LevelsScaleDownRoundingUp();
     testWritingAFortLeavesOtherBuildingsAlone();
+    testAGd5FortLevelSurvivesTheReturnTrip();
     testAFortBuiltInGd5SurvivesComingHome();
     return check::finish("test_forts");
 }

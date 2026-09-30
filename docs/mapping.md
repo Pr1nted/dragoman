@@ -56,7 +56,7 @@ Python prints for the colour tuple, `"(1, 0, 0)"`, spaces included.
 | claims | `claims.json` (per nation) | `claims` (per nation) | mapped |
 | population | `population.json` | — | carried |
 | industry | `resources.json` `industry.level` | `buildings` (factories counted) | mapped, approximately |
-| fortification | `resources.json` | `buildings` (`Fort Lvl N`) | mapped, scaled 1:4 |
+| fortification | `resources.json` | `buildings` (`Fort Lvl N`) | mapped, scaled 1:4, original kept when unchanged |
 | port | `ports.json` | — | carried |
 | resources | five fixed deposits, each a surface and reserve figure | free-form named quantities | carried |
 | garrison | `armies.json` — a headcount | `units` — typed divisions | mapped, approximately |

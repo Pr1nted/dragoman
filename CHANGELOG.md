@@ -4,6 +4,23 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [semver](https://semver.org/), with a separate ABI version — see
 [docs/versioning.md](docs/versioning.md).
 
+## Unreleased
+
+### Fixed
+
+- **A Greater Diplomacy fort grew every time its map crossed.** GD5 has twenty
+  fort levels and Open Doctrines five, so `Fort Lvl 5` arrived there as level 2
+  and came back as `Lvl 8`. Five of Greater Diplomacy's own shipped maps failed
+  conformance on it.
+
+  The carried fort is now kept when the level on the other side still matches
+  what it implies, and only rewritten when somebody actually changed it -- the
+  same rule the political axis uses, which forts predate.
+
+  No unit test saw this, because every fort test ran Open Doctrines -> GD5 ->
+  Open Doctrines, which is exact by construction. The direction that is not
+  exact was the one nothing exercised. `test_forts.cpp` now runs it.
+
 ## 0.5.0 — 2026-09-27
 
 Greater Diplomacy 5 gained domestic politics and guarantees. Three more things

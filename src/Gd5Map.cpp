@@ -1048,13 +1048,48 @@ bool writeGd5Map(const std::string& dir, const World& world, const Options& opt,
          * old entries go before the new one is added, and every building that
          * is not a fort is left exactly where it was. */
         {
-            Json kept = Json::array();
-            for (const auto& b : buildings) {
-                if (b.is_string() && gd5FortLevel(b.get<std::string>()) > 0) continue;
-                kept.push_back(b);
-            }
+            /* IN PLACE, keeping the order. Filtering the forts out and
+             * appending the new one rewrites a list that was otherwise
+             * unchanged -- ["Factory", "Fort Lvl 8", "Recruitment"] comes back
+             * as ["Factory", "Recruitment", "Fort Lvl 12"], the same set in a
+             * different order. The round trip then reports gd5_buildings[2] as
+             * changed, which is how five of Greater Diplomacy's own maps
+             * started failing conformance. */
             const int level = fortToGd5(p.fortification);
-            if (level > 0) kept.push_back("Fort Lvl " + std::to_string(level));
+            Json kept = Json::array();
+            bool placed = false;
+            for (const auto& b : buildings) {
+                const int carriedLevel =
+                    b.is_string() ? gd5FortLevel(b.get<std::string>()) : 0;
+                if (carriedLevel == 0) {
+                    kept.push_back(b);
+                    continue;
+                }
+                /* The first fort becomes the new one; any others go, because
+                 * GD5 keeps one per province and reads the highest. */
+                if (placed || level <= 0) continue;
+                placed = true;
+
+                /* PRECISION, the same rule the political axis uses.
+                 *
+                 * This side has twenty levels and Open Doctrines has five, so a
+                 * Fort Lvl 5 arrives there as level 2 and would come back as
+                 * Lvl 8 -- a fort that grows every time the map crosses. If the
+                 * level over there is still what THIS fort implies, nothing was
+                 * changed and the original stands; if it is anything else,
+                 * somebody moved it and the scaled value is the true one.
+                 *
+                 * Five of Greater Diplomacy's own maps failed conformance on
+                 * exactly this, and no unit test saw it: the fort tests assert
+                 * the OD -> GD5 -> OD direction, which is exact by
+                 * construction, and never the other way round. */
+                if (fortFromGd5(carriedLevel) == p.fortification) {
+                    kept.push_back(b);
+                } else {
+                    kept.push_back("Fort Lvl " + std::to_string(level));
+                }
+            }
+            if (level > 0 && !placed) kept.push_back("Fort Lvl " + std::to_string(level));
             buildings = kept;
         }
 
