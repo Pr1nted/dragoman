@@ -72,6 +72,21 @@ std::vector<uint8_t> encodePngGray(const std::vector<uint8_t>& gray, int w, int 
 
 /* ------------------------------------------------------------------ rasters */
 
+std::string rasterFingerprint(const std::vector<uint32_t>& ids) {
+    /* FNV-1a over the ids, plus the count, rendered as hex. */
+    uint64_t h = 1469598103934665603ull;
+    for (uint32_t id : ids) {
+        for (int b = 0; b < 4; ++b) {
+            h ^= static_cast<uint8_t>((id >> (b * 8)) & 0xff);
+            h *= 1099511628211ull;
+        }
+    }
+    char buf[40];
+    std::snprintf(buf, sizeof(buf), "%016llx:%zu",
+                  static_cast<unsigned long long>(h), ids.size());
+    return std::string(buf);
+}
+
 std::vector<uint32_t> rasterFromOd(const Image& img) {
     std::vector<uint32_t> ids(static_cast<size_t>(img.width) * img.height, 0);
     for (size_t i = 0, p = 0; p < ids.size(); ++p, i += 4) {

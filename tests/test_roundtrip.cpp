@@ -369,6 +369,77 @@ static void testRealMapsIfAvailable() {
     }
 }
 
+
+/* The land and sea layer is CARRIED, not redrawn.
+ *
+ * It is not reproducible from the model: the model knows which PROVINCES are
+ * sea, while the file draws the coastline per PIXEL, and the two disagree along
+ * every shore. Regenerating it turned 20,726 coastline pixels into land on the
+ * world map, and made the file 8.8 times larger by writing truecolour where the
+ * game ships an indexed PNG.
+ *
+ * THE MASK IS DELIBERATELY MADE UNREPRODUCIBLE FIRST. The fixture's provinces
+ * are rectangles, so a generated mask and a carried one are identical on it,
+ * and the first version of this test passed just as happily with the carrying
+ * disabled -- it proved nothing. Planting a coastline that no amount of
+ * province arithmetic would produce is what gives it something to catch.
+ */
+static void testTheLandSeaLayerIsCarriedNotRedrawn() {
+    const std::string odmap = writeFixtureOdmap();
+    REQUIRE(!odmap.empty());
+
+    Zip planted;
+    std::string err;
+    REQUIRE(readZip(odmap, planted, err));
+    const ZipEntry* existing = planted.find("land_sea.png");
+    REQUIRE(existing != nullptr);
+
+    /* A mask the provinces cannot imply: every eleventh pixel flipped to sea,
+     * scattered across land and water alike. */
+    Image mask;
+    REQUIRE(decodePng(existing->data, mask));
+    REQUIRE(!mask.empty());
+    for (size_t p = 0, i = 0; p < static_cast<size_t>(mask.width) * mask.height; ++p, i += 4) {
+        if (p % 11 == 0) {
+            mask.rgba[i] = mask.rgba[i + 1] = mask.rgba[i + 2] = 40;  /* sea */
+        }
+    }
+    const std::vector<uint8_t> distinctive = encodePng(mask);
+    planted.put("land_sea.png", distinctive);
+    REQUIRE(writeZip(odmap, planted, err));
+
+    Options opt;
+    Report report;
+    World world;
+    REQUIRE(readOdMap(odmap, opt, world, report));
+
+    const std::string again = fixture::scratch("land-sea-again.odmap");
+    REQUIRE(writeOdMap(again, world, opt, report));
+
+    Zip second;
+    REQUIRE(readZip(again, second, err));
+    const ZipEntry* secondMask = second.find("land_sea.png");
+    REQUIRE(secondMask != nullptr);
+    CHECK(secondMask->data == distinctive);
+
+    /* And when the geography HAS changed, the carried mask must NOT be reused:
+     * it was drawn against a raster that no longer exists, and the game reads
+     * the mask and the provinces both. */
+    World moved = world;
+    REQUIRE(!moved.raster.empty());
+    for (size_t i = 0; i < moved.raster.size(); i += 7) moved.raster[i] = 0;
+
+    const std::string changed = fixture::scratch("land-sea-changed.odmap");
+    Report r2;
+    REQUIRE(writeOdMap(changed, moved, opt, r2));
+
+    Zip third;
+    REQUIRE(readZip(changed, third, err));
+    const ZipEntry* thirdMask = third.find("land_sea.png");
+    REQUIRE(thirdMask != nullptr);
+    CHECK(thirdMask->data != distinctive);
+}
+
 int main() {
     testOdToGd5AndBack();
     testGd5ToOdAndBack();
@@ -378,5 +449,6 @@ int main() {
     testOceanIsInventedForGd5AndRemovedComingBack();
     testWithoutSidecarLosesData();
     testRealMapsIfAvailable();
+    testTheLandSeaLayerIsCarriedNotRedrawn();
     return check::finish("test_roundtrip");
 }

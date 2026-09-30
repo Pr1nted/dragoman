@@ -48,6 +48,13 @@ std::vector<uint8_t> encodePngGray(const std::vector<uint8_t>& gray, int w, int 
 /* ------------------------------------------------------------------ rasters */
 
 /* Open Doctrines' provinces.png: id = (R << 16) | (G << 8) | B. */
+/* A short, stable fingerprint of a province raster.
+ *
+ * Not a cryptographic hash and not trying to be: it answers one question --
+ * "is this the same raster the carried land and sea mask was drawn against?"
+ * -- where the cost of a collision is a mask redrawn unnecessarily. */
+std::string rasterFingerprint(const std::vector<uint32_t>& ids);
+
 std::vector<uint32_t> rasterFromOd(const Image& img);
 Image                 rasterToOd(const std::vector<uint32_t>& ids, int w, int h);
 

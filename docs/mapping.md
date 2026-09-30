@@ -61,6 +61,7 @@ Python prints for the colour tuple, `"(1, 0, 0)"`, spaces included.
 | resources | five fixed deposits, each a surface and reserve figure | free-form named quantities | carried |
 | garrison | `armies.json` — a headcount | `units` — typed divisions | mapped, approximately |
 | terrain | — (land/sea raster only) | `terrain`, 13-colour palette | derived + carried |
+| land/sea mask | `land_sea.png` | — (implied by sea provinces) | **carried**, see below |
 | neighbours | — (derived at load) | `neighbors` | **derived** |
 | centre | — (derived at load) | `center` | **derived** |
 | coastal | — | `is_coastal` | derived |
@@ -153,6 +154,24 @@ out across the Atlantic.
 The effect on GD5's 1914 scenario: land goes from 20.3% of the map (province
 interiors only) to 24.4% once borders are closed, with zero unpainted pixels
 left inside the landmass — the same invariant Open Doctrines' own maps hold.
+
+
+### The land and sea layer is carried, not redrawn
+
+`land_sea.png` looks like something the model already holds -- it knows which
+provinces are sea -- and it is not. The file draws the coastline **per pixel**;
+the model has it **per province**, and the two disagree along every shore.
+
+Regenerating it from the model was wrong twice over: 20,726 coastline pixels on
+the world map became land, and the file grew 8.8 times, because the generated
+one is truecolour where the game ships an indexed PNG.
+
+So the original is carried, and written back byte for byte -- unless the
+province raster changed on the way through, in which case a carried mask would
+describe a coastline that no longer exists. A fingerprint of the raster travels
+with the mask so the writer can tell those two cases apart, and a redrawn mask
+is reported as `od.land_sea`.
+
 
 ## Nations
 

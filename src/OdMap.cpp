@@ -357,7 +357,7 @@ bool readOdMap(const std::string& path, const Options& opt, World& world, Report
         static const char* modelled[] = {
             "metadata.json", "provinces.json", "countries.json", "population.json",
             "resources.json", "ports.json", "armies.json", "ships.json",
-            "relations.json", "claims.json", "provinces.png", "land_sea.png", "research.json",
+            "relations.json", "claims.json", "provinces.png", "research.json",
             "political.png", "political_compass.json", "country_compass.json",
             "minorities.json"};
         Json carried = Json::object();
@@ -381,6 +381,20 @@ bool readOdMap(const std::string& path, const Options& opt, World& world, Report
             }
             world.sidecar_blobs["od/" + e.name] = e.data;
         }
+        /* WHICH RASTER THAT MASK BELONGS TO.
+         *
+         * land_sea.png is not reproducible from the model. The model knows
+         * which PROVINCES are sea; the file draws the coastline per PIXEL, and
+         * the two disagree along every shore -- seaIdsFromLandSea says so in as
+         * many words. Regenerating it turned 20,726 pixels of coastline into
+         * land on the world map, and made the file 8.8 times larger by writing
+         * truecolour where the game ships an indexed PNG.
+         *
+         * So it is carried. But a carried mask is only right for the raster it
+         * was drawn against: if the geography changed on the way through, the
+         * mask and the provinces would disagree, and Open Doctrines reads both.
+         * The hash is what lets the writer tell those two cases apart. */
+        world.sidecar["od"]["land_sea_for_raster"] = rasterFingerprint(world.raster);
         world.sidecar["od"]["files"] = carried;
         world.sidecar["od"]["zip_order"] = Json::array();
         for (const auto& e : zip.entries) {
@@ -726,7 +740,37 @@ bool writeOdMap(const std::string& path, const World& world, const Options& opt,
 
     const Image provImg = rasterToOd(raster, world.width, world.height);
     zip.put("provinces.png", encodePng(provImg));
-    zip.put("land_sea.png", encodePng(landSeaImage(raster, world.width, world.height, seaIds)));
+    /* The original mask when it still belongs to this raster, and a generated
+     * one otherwise. Reusing it keeps the pixel-resolution coastline the model
+     * cannot hold, and keeps the game's own compact indexed PNG rather than
+     * replacing it with truecolour. */
+    bool wroteCarriedMask = false;
+    const auto carriedMask = world.sidecar_blobs.find("od/land_sea.png");
+    if (carriedMask != world.sidecar_blobs.end() && !carriedMask->second.empty()) {
+        const auto forRaster = world.sidecar.find("od");
+        const std::string want =
+            forRaster != world.sidecar.end() && forRaster->is_object()
+                ? forRaster->value("land_sea_for_raster", std::string())
+                : std::string();
+        /* world.raster, NOT the local `raster`: the writer may have filled
+         * gaps into its own copy a moment ago, and fingerprinting that would
+         * compare the model's raster on the way in against a modified one on
+         * the way out, so the mask would never be reused at all. */
+        if (!want.empty() && want == rasterFingerprint(world.raster)) {
+            zip.put("land_sea.png", carriedMask->second);
+            wroteCarriedMask = true;
+        } else if (!want.empty()) {
+            report.info("od.land_sea",
+                        "the province raster changed on the way through, so the land and sea "
+                        "layer was redrawn from it rather than carried. Its coastline is now "
+                        "province-accurate rather than pixel-accurate, which is the best a "
+                        "changed map allows");
+        }
+    }
+    if (!wroteCarriedMask) {
+        zip.put("land_sea.png",
+                encodePng(landSeaImage(raster, world.width, world.height, seaIds)));
+    }
 
     Json meta = Json::object();
     meta["name"] = world.name;
