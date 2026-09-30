@@ -139,8 +139,39 @@ unciv.stripped: this map carries no dragoman record, so it has been re-saved by
 Unciv itself ... only the terrain grid survives
 ```
 
-## Not yet verified in the game
+## Verified by the game itself
 
-The file is well-formed, the grid matches Unciv's arithmetic, and only Unciv's
-own terrain names are written. Nobody has opened one in Unciv. Until somebody
-does, "playable" is a claim about the file and not about the experience.
+Unciv is open source and ships a jar, so the questions below were answered by
+running its own code headlessly rather than by reading it and guessing:
+
+| question | answer |
+|---|---|
+| does plain, ungzipped JSON load? | **yes** — `mapFromSavedString` tries unzip and falls back |
+| does an unknown top-level key survive a re-save? | **no** — 5.18 MB in, 208 KB out, record gone |
+| does `description` survive a re-save? | **yes** |
+| does the map pass `TileMap.setTransients`? | **yes**, against the real 29-terrain ruleset |
+
+`tools/unciv/ValidateWithUnciv.java` is that check, and CI runs it over every
+map the suite writes. Two traps if you run it by hand:
+
+- Gdx's `HeadlessFiles` resolves `internal` paths against the **working
+  directory**, not the classpath, so the jar's `jsons/` must be extracted
+  first. Without that the rulesets load with **zero terrains** and every map
+  fails with `Terrain Ocean does not exist in ruleset!` — which reads exactly
+  like a broken map and is nothing of the kind.
+- `getVanillaRuleset()` returned an empty ruleset here; the loop picks whichever
+  cached ruleset actually has terrains.
+
+It earned its place immediately: `description` was being written onto
+`mapParameters`, which has no such field, so Unciv read it back as an empty
+string. Nothing in the file looked wrong.
+
+## Still not verified
+
+The map loads, and the engine accepts it. Nobody has **played** one. Two things
+remain open, and both need the game with a screen in front of it:
+
+- **Starting locations.** These maps carry none. Whether Unciv places civs
+  sensibly on a custom map without them is not something loading answers.
+- Whether a world resampled to hexes is any *good* to play, which no check
+  here can speak to.

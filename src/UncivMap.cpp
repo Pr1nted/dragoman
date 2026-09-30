@@ -249,14 +249,23 @@ bool writeUncivMap(const std::string& path, const World& world, const Options& o
      * library reads. */
     params["worldWrap"] = true;
 
-    /* Survives a re-save from Unciv's editor, where the sidecar does not, so a
-     * map that comes back stripped can still say where it came from. */
-    params["description"] = std::string("Translated by open-dragoman ")
-                            + DRAGOMAN_VERSION_STRING;
-
     Json map = Json::object();
     map["mapParameters"] = params;
     map["tileList"] = tiles;
+
+    /* ON THE MAP, NOT ON ITS PARAMETERS. `description` is a field of TileMap;
+     * MapParameters has no such field, so putting it there means Unciv ignores
+     * it and TileMap.description stays empty -- which is exactly what this did
+     * until the game's own loader was asked and reported an empty string.
+     *
+     * It is here because it is the one thing that SURVIVES a save from Unciv's
+     * editor. Verified by loading a map with the game's MapSaver and saving it
+     * again: the dragoman key below does not come back, and this does. */
+    map["description"] = std::string("Translated by open-dragoman ")
+                         + DRAGOMAN_VERSION_STRING
+                         + ". The record this map carried has been removed by "
+                           "re-saving it in Unciv; converting it back will no longer "
+                           "restore the original world.";
 
     /* THE SIDECAR LIVES IN THE FILE, under a key Unciv ignores.
      *

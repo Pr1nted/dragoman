@@ -116,6 +116,38 @@ jobs:
             python3 tools/validate_unciv.py "$map" rs-*.json
           done
 
+      # And then ask the GAME, which is a stronger question than asking its
+      # ruleset: TileMap.setTransients is the step Unciv runs before a map is
+      # usable, so this catches whatever that catches rather than only what
+      # this project knew to look for. It found a real bug the first time it
+      # ran -- `description` was being written onto mapParameters, which has no
+      # such field, so the game read it back as empty.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Load every map in Unciv itself
+        run: |
+          set -e
+          ver=$(curl -sfL https://api.github.com/repos/yairm210/Unciv/releases/latest \
+                | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"])') || ver=""
+          if [ -z "$ver" ]; then
+            echo "::warning::could not reach the Unciv release API; maps were not loaded"
+            exit 0
+          fi
+          curl -sfL -o Unciv.jar \
+            "https://github.com/yairm210/Unciv/releases/download/$ver/Unciv.jar" || {
+              echo "::warning::could not download Unciv $ver; maps were not loaded"; exit 0; }
+
+          # Gdx's HeadlessFiles resolves `internal` against the WORKING
+          # DIRECTORY, not the classpath. Without this the rulesets load with
+          # zero terrains and every map fails with "Terrain Ocean does not
+          # exist in ruleset!", which reads exactly like a broken map.
+          unzip -oq Unciv.jar 'jsons/*' -d .
+
+          javac -cp Unciv.jar -d unciv-out tools/unciv/ValidateWithUnciv.java
+          java -cp unciv-out:Unciv.jar ValidateWithUnciv build/test-scratch/unciv-*.json
+
   # Every binding, against a library built here.
   #
   # Each one wraps the same flat ABI and each one can get it wrong in its own
