@@ -142,22 +142,105 @@ static void testInventedClimateIsDeclared() {
     CHECK(said);
 }
 
-/* Reading is refused, and refused out loud. Returning a half-built world from
- * a hex grid would be worse than declining: the province boundaries it would
- * invent never existed. */
-static void testReadingIsRefusedRatherThanGuessed() {
+/* A map that goes out and comes back is the map that set out.
+ *
+ * Not because the hexes are read back into provinces -- they cannot be -- but
+ * because the original rides inside the file, under a key Unciv ignores. The
+ * raster in particular must return exactly: province SHAPES are the thing a
+ * hex grid destroys and the thing no amount of metadata rebuilds. */
+static void testTheOriginalComesBackThroughTheFile() {
     World w = fixture::makeWorld();
     Options opt;
     Report report;
-    const std::string out = fixture::scratch("unciv-read.json");
+    const std::string out = fixture::scratch("unciv-carry.json");
     REQUIRE(writeUncivMap(out, w, opt, report));
+
+    World back;
+    Report r2;
+    REQUIRE(readUncivMap(out, opt, back, r2));
+
+    CHECK_EQ(back.provinces.size(), w.provinces.size());
+    CHECK_EQ(back.nations.size(), w.nations.size());
+    CHECK_EQ(back.width, w.width);
+    CHECK_EQ(back.height, w.height);
+    CHECK(back.raster == w.raster);
+
+    /* Flags are bytes, and the model snapshot records only their SIZE -- it
+     * describes a world rather than serialising one. A record built from it
+     * alone comes home with every flag missing, which is how this was found:
+     * by comparing a returned archive against the one that set out. */
+    size_t withFlags = 0, returned = 0;
+    for (const auto& n : w.nations) {
+        if (!n.flag_bytes.empty()) ++withFlags;
+    }
+    for (const auto& n : back.nations) {
+        if (!n.flag_bytes.empty()) ++returned;
+    }
+    CHECK_EQ(returned, withFlags);
+}
+
+/* A terrain changed in Unciv is a terrain that comes home changed. The carried
+ * original is the starting point, not the last word. */
+static void testAnEditInUncivIsKept() {
+    World w = fixture::makeWorld();
+    for (auto& p : w.provinces) {
+        if (!p.is_sea) p.terrain = "plains";
+    }
+
+    Options opt;
+    Report report;
+    const std::string out = fixture::scratch("unciv-edit.json");
+    REQUIRE(writeUncivMap(out, w, opt, report));
+
+    /* The player turns some plains into desert. */
+    std::vector<uint8_t> bytes;
+    REQUIRE(readFile(out, bytes));
+    Json map = Json::parse(bytes.begin(), bytes.end(), nullptr, false);
+    REQUIRE(!map.is_discarded());
+    long changed = 0;
+    for (auto& t : map["tileList"]) {
+        if (t.value("baseTerrain", std::string()) == "Plains") {
+            t["baseTerrain"] = "Desert";
+            ++changed;
+        }
+    }
+    REQUIRE(changed > 0);
+    REQUIRE(writeFile(out, map.dump()));
+
+    World back;
+    Report r2;
+    REQUIRE(readUncivMap(out, opt, back, r2));
+
+    bool anyDesert = false;
+    for (const auto& p : back.provinces) {
+        if (p.terrain == "desert") anyDesert = true;
+    }
+    CHECK(anyDesert);
+}
+
+/* A map Unciv itself re-saved has no carried record: its serialiser writes from
+ * the TileMap object and drops anything not on it. That is refused, and named,
+ * rather than answered with province boundaries invented from hexes. */
+static void testAStrippedMapIsRefusedAndSaysWhy() {
+    World w = fixture::makeWorld();
+    Options opt;
+    Report report;
+    const std::string out = fixture::scratch("unciv-stripped.json");
+    REQUIRE(writeUncivMap(out, w, opt, report));
+
+    std::vector<uint8_t> bytes;
+    REQUIRE(readFile(out, bytes));
+    Json map = Json::parse(bytes.begin(), bytes.end(), nullptr, false);
+    REQUIRE(!map.is_discarded());
+    map.erase("dragoman");                    /* what Unciv's own save does */
+    REQUIRE(writeFile(out, map.dump()));
 
     World back;
     Report r2;
     CHECK(!readUncivMap(out, opt, back, r2));
     bool named = false;
     for (const auto& e : r2.entries()) {
-        if (e.message.find("not implemented") != std::string::npos) named = true;
+        if (e.message.find("re-saved by Unciv") != std::string::npos) named = true;
     }
     CHECK(named);
 }
@@ -176,7 +259,9 @@ int main() {
     testTheGridIsUncivsGrid();
     testOnlyUncivsOwnTerrainsAreWritten();
     testInventedClimateIsDeclared();
-    testReadingIsRefusedRatherThanGuessed();
+    testTheOriginalComesBackThroughTheFile();
+    testAnEditInUncivIsKept();
+    testAStrippedMapIsRefusedAndSaysWhy();
     testAWrittenMapIsDetectedAsUnciv();
     return check::finish("test_unciv");
 }

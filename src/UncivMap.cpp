@@ -21,7 +21,10 @@
  * continents are sheared apart.
  */
 #include "Formats.h"
+#include "ModelJson.h"
 #include "Raster.h"
+
+#include <dragoman/dragoman.h>
 
 #include <algorithm>
 #include <cmath>
@@ -59,6 +62,44 @@ UncivTerrain uncivTerrainFor(const std::string& token) {
     if (token == "tundra") return {"Tundra", nullptr};
     if (token == "frozen") return {"Snow", nullptr};
     return {"Grassland", nullptr};
+}
+
+/* Unciv's terrain back to the model's token.
+ *
+ * The forward table is not injective -- Plains carries both `plains` and, with
+ * a Hill on it, `hills` -- so the feature has to be read as well as the base,
+ * and a bare Plains must not come back as hills. Anything Unciv has and this
+ * model does not is left for the caller to report rather than forced into the
+ * nearest token. */
+std::string modelTerrainFor(const std::string& base, const Json& tile) {
+    std::vector<std::string> features;
+    if (tile.contains("terrainFeatures") && tile["terrainFeatures"].is_array()) {
+        for (const auto& f : tile["terrainFeatures"]) {
+            if (f.is_string()) features.push_back(f.get<std::string>());
+        }
+    }
+    const auto has = [&features](const char* want) {
+        return std::find(features.begin(), features.end(), want) != features.end();
+    };
+
+    if (base == "Ocean") return "ocean";
+    if (base == "Coast") return "coastal_sea";
+    if (base == "Lakes") return "lakes";
+    if (base == "Mountain") return "mountain";
+    if (base == "Snow") return "frozen";
+    if (base == "Tundra") return "tundra";
+    if (base == "Desert") return "desert";
+    if (base == "Plains") {
+        if (has("Hill")) return "hills";
+        if (has("Jungle")) return "jungle";
+        return "plains";
+    }
+    if (base == "Grassland") {
+        if (has("Forest")) return "forest";
+        if (has("Marsh")) return "swamp";
+        return "plains";  /* the model has no plain grassland of its own */
+    }
+    return std::string();
 }
 
 /* A LAND terrain for a province that has none.
@@ -208,9 +249,71 @@ bool writeUncivMap(const std::string& path, const World& world, const Options& o
      * library reads. */
     params["worldWrap"] = true;
 
+    /* Survives a re-save from Unciv's editor, where the sidecar does not, so a
+     * map that comes back stripped can still say where it came from. */
+    params["description"] = std::string("Translated by open-dragoman ")
+                            + DRAGOMAN_VERSION_STRING;
+
     Json map = Json::object();
     map["mapParameters"] = params;
     map["tileList"] = tiles;
+
+    /* THE SIDECAR LIVES IN THE FILE, under a key Unciv ignores.
+     *
+     * Its loader is configured `ignoreUnknownFields = true` (UncivJson.kt), so
+     * this key is read past without complaint, and there is no stray companion
+     * file for a player to lose or forget to copy.
+     *
+     * WHAT IT DOES NOT SURVIVE, and the honest limit of the whole scheme: a
+     * save from Unciv's own map editor. libGDX serialises from the TileMap
+     * OBJECT, which has no field for this, so `json().toJson(tileMap)` writes a
+     * file without it. Loading is safe; re-saving discards it. The reader
+     * copes -- it rebuilds from the hexes and says the fidelity dropped --
+     * but it cannot invent back what the file no longer carries.
+     *
+     * `description` is the one field that WOULD survive, being a real String on
+     * TileMap, and it is used only for a short marker: it is user-visible text
+     * in the editor, and a megabyte of base64 in it would be both unreadable
+     * and, most likely, unusable. */
+    if (opt.carry_sidecar) {
+        Json carried = Json::object();
+        carried["format"] = "dragoman-unciv-sidecar";
+        carried["version"] = 1;
+        carried["library"] = DRAGOMAN_VERSION_STRING;
+        carried["columns"] = columns;
+        carried["rows"] = rows;
+        /* The model as it stood, so nations, names, scripts and every province
+         * field a hexagon cannot hold come home intact. */
+        carried["model"] = worldToJson(world);
+        /* And the raster, because province SHAPES are the thing hexes destroy
+         * and the thing no amount of metadata rebuilds. Encoded the way Open
+         * Doctrines packs it, so one decoder serves both. */
+        const Image raster = rasterToOd(world.raster, world.width, world.height);
+        carried["raster_png"] = base64Encode(encodePng(raster));
+        carried["width"] = world.width;
+        carried["height"] = world.height;
+
+        /* THE BYTES, separately, because the model snapshot does not hold
+         * them. worldToJson writes `flag_bytes` as a COUNT -- it describes a
+         * world rather than serialising one -- so a record built from it alone
+         * comes home with every nation's flag missing. Found by comparing a
+         * returned archive against the one that set out: 247 flag images
+         * absent, and nothing in the conversion had said so. */
+        Json flags = Json::object();
+        for (const auto& n : world.nations) {
+            if (n.flag_bytes.empty()) continue;
+            flags[n.key] = Json{{"name", n.flag_name},
+                                {"png", base64Encode(n.flag_bytes)}};
+        }
+        if (!flags.empty()) carried["flags"] = flags;
+
+        Json blobs = Json::object();
+        for (const auto& kv : world.sidecar_blobs) {
+            blobs[kv.first] = base64Encode(kv.second);
+        }
+        if (!blobs.empty()) carried["blobs"] = blobs;
+        map["dragoman"] = carried;
+    }
 
     if (!writeFile(path, map.dump())) {
         setLastError("could not write " + path);
@@ -241,28 +344,151 @@ bool writeUncivMap(const std::string& path, const World& world, const Options& o
 /* ------------------------------------------------------- Unciv -> model */
 
 bool readUncivMap(const std::string& path, const Options& opt, World& world, Report& report) {
-    (void)path; (void)opt; (void)world;
-    /* NOT IMPLEMENTED, and saying so rather than doing it badly.
+    std::vector<uint8_t> bytes;
+    if (!readFile(path, bytes)) {
+        setLastError("could not read " + path);
+        return false;
+    }
+    const Json map = Json::parse(bytes.begin(), bytes.end(), nullptr, false);
+    if (map.is_discarded() || !map.is_object() || !map.contains("tileList")) {
+        setLastError(path + " is not an Unciv map");
+        return false;
+    }
+
+    /* THE ORIGINAL, if it is still in the file.
      *
-     * Reading is not the mirror of writing here. Writing samples a raster onto
-     * hexes and loses the province boundaries; reading would have to invent
-     * them back, by merging contiguous same-owner hexes into regions that never
-     * existed in that shape. The result would load, and would not be the map
-     * anybody drew.
+     * When it is, this is not a reconstruction at all: the world that set out
+     * is restored whole, and the hexes are then read for what the PLAYER
+     * changed. That ordering is the point. Rebuilding geography from a hex
+     * grid throws away every province boundary; restoring and then applying
+     * edits keeps both. */
+    const auto carried = map.find("dragoman");
+    const bool haveOriginal = carried != map.end() && carried->is_object()
+                              && carried->contains("model");
+
+    if (!haveOriginal) {
+        /* Unciv's own editor re-saved this: libGDX writes from the TileMap
+         * object, which has no field for the sidecar, so it is gone. What is
+         * left is the hex grid, and a hex grid is all this can answer with. */
+        report.warn("unciv.stripped",
+                    "this map carries no dragoman record, so it has been re-saved by Unciv "
+                    "itself (its serialiser writes from the TileMap object and drops anything "
+                    "not on it). Province shapes, nations, names and scripts cannot be "
+                    "recovered from hexes; only the terrain grid survives");
+        setLastError("this Unciv map carries no dragoman record, so the original cannot be "
+                     "restored and a hex grid alone is not a province map");
+        return false;
+    }
+
+    if (!worldFromJson((*carried)["model"], world, report)) {
+        setLastError("the record carried in " + path + " could not be read");
+        return false;
+    }
+
+    /* The raster comes back from the carried PNG rather than from the hexes:
+     * it is the one thing the hexes genuinely cannot express. */
+    const auto rasterIt = carried->find("raster_png");
+    if (rasterIt != carried->end() && rasterIt->is_string()) {
+        Image img;
+        if (decodePng(base64Decode(rasterIt->get<std::string>()), img) && !img.empty()) {
+            world.raster = rasterFromOd(img);
+            world.width = img.width;
+            world.height = img.height;
+        }
+    }
+
+    /* The bytes the model snapshot describes but does not contain. */
+    const auto flagsIt = carried->find("flags");
+    if (flagsIt != carried->end() && flagsIt->is_object()) {
+        for (auto f = flagsIt->begin(); f != flagsIt->end(); ++f) {
+            Nation* n = world.findNation(f.key());
+            if (n == nullptr || !f.value().is_object()) continue;
+            n->flag_name = f.value().value("name", n->flag_name);
+            n->flag_bytes = base64Decode(f.value().value("png", std::string()));
+        }
+    }
+    const auto blobsIt = carried->find("blobs");
+    if (blobsIt != carried->end() && blobsIt->is_object()) {
+        for (auto b = blobsIt->begin(); b != blobsIt->end(); ++b) {
+            if (b.value().is_string()) {
+                world.sidecar_blobs[b.key()] = base64Decode(b.value().get<std::string>());
+            }
+        }
+    }
+
+    /* ---- and now the player's edits ----
      *
-     * What makes the export direction honest is that the ORIGINAL rides in the
-     * sidecar, so a map that crosses and comes back is the map that set out.
-     * Doing that properly needs somewhere to put a sidecar beside a single
-     * JSON file, and a decision about what a player's edits in Unciv should
-     * mean on the way home -- neither of which is answered by guessing here.
-     *
-     * See docs/unciv.md. */
-    report.error("unciv.read",
-                 "reading Unciv maps is not implemented. Converting TO Unciv works; coming back "
-                 "would have to invent province boundaries the hex grid does not carry, and a "
-                 "map rebuilt that way is not the map anybody drew");
-    setLastError("reading Unciv maps is not implemented yet");
-    return false;
+     * Write the restored world out again, in memory, on the same grid, and
+     * compare. Any hex that differs is one somebody changed in Unciv, and it
+     * is applied to the province beneath it. Comparing against what THIS
+     * library would have written -- rather than against some notion of what
+     * the terrain ought to be -- is what makes an unedited map come back
+     * untouched. */
+    const int columns = carried->value("columns", 0);
+    const int rows = carried->value("rows", 0);
+    long edits = 0, unmatched = 0;
+
+    if (columns > 0 && rows > 0 && world.width > 0 && world.height > 0) {
+        std::map<int64_t, Province*> byId;
+        for (auto& p : world.provinces) byId[p.id] = &p;
+
+        const Json& tiles = map["tileList"];
+        for (size_t i = 0; i < tiles.size(); ++i) {
+            const int row = static_cast<int>(i) / columns;
+            const int col = static_cast<int>(i) % columns;
+            if (row >= rows) break;
+
+            const int px = static_cast<int>((col + 0.5) * world.width / columns);
+            const int py = static_cast<int>((row + 0.5) * world.height / rows);
+            const size_t idx = static_cast<size_t>(py) * world.width + px;
+            if (idx >= world.raster.size()) continue;
+
+            const auto it = byId.find(static_cast<int64_t>(world.raster[idx]));
+            if (it == byId.end()) continue;
+            Province* prov = it->second;
+
+            /* What this library would have written for that province. */
+            const UncivTerrain expected = prov->terrain.empty()
+                                              ? UncivTerrain{nullptr, nullptr}
+                                              : uncivTerrainFor(prov->terrain);
+            const std::string got = tiles[i].value("baseTerrain", std::string());
+            if (expected.base == nullptr) {
+                /* The province had no terrain, so the hex carried an invented
+                 * climate. A difference here is not an edit -- it is the
+                 * invention -- and adopting it would quietly turn latitude
+                 * guesses into map data. */
+                continue;
+            }
+            if (got != expected.base) {
+                const std::string token = modelTerrainFor(got, tiles[i]);
+                if (!token.empty() && token != prov->terrain) {
+                    prov->terrain = token;
+                    prov->is_sea = isSeaTerrain(token);
+                    ++edits;
+                } else if (token.empty()) {
+                    ++unmatched;
+                }
+            }
+        }
+    }
+
+    world.origin = 3;
+    report.info("unciv.read",
+                "restored " + std::to_string(world.provinces.size()) + " province(s) and "
+                + std::to_string(world.nations.size()) + " nation(s) from the record carried in "
+                "the map file");
+    if (edits > 0) {
+        report.info("unciv.edits",
+                    "took " + std::to_string(edits) + " terrain change(s) made in Unciv over the "
+                    "carried original; everything else came home as it set out");
+    }
+    if (unmatched > 0) {
+        report.warn("unciv.unmatched",
+                    std::to_string(unmatched) + " hex(es) carry a terrain with no counterpart on "
+                    "this side and were left as they were");
+    }
+    (void)opt;
+    return true;
 }
 
 }  // namespace dragoman

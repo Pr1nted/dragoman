@@ -215,11 +215,67 @@ static void testANonAggressionPactIsReportedNotInvented() {
     }
 }
 
+
+/* A war written the way the GAME writes it is a war this library reads.
+ *
+ * Open Doctrines' relations.json uses "war"; this read "atWar" and nothing
+ * else, so every war in every shipped map was dropped on the way in -- thirty
+ * in the world map, Ukraine-Russia and India-Pakistan among them -- and no
+ * conversion said so, because a relation that is never read cannot be reported
+ * as lost. Found by comparing a returned archive against the one that set out
+ * rather than by any test passing or failing.
+ */
+static void testAWarWrittenTheGamesWayIsRead() {
+    World w = fixture::makeWorld();
+    REQUIRE(w.nations.size() >= 2);
+    const std::string a = w.nations[0].key;
+    const std::string b = w.nations[1].key;
+
+    Options opt;
+    Report report;
+    const std::string odmap = fixture::scratch("war-key.odmap");
+    REQUIRE(writeOdMap(odmap, w, opt, report));
+
+    /* Rewrite relations.json the way the game does, with "war". */
+    Zip zip;
+    std::string err;
+    REQUIRE(readZip(odmap, zip, err));
+    Json rel = Json::object();
+    rel[a] = Json{{b, Json{{"war", true}}}};
+    rel[b] = Json{{a, Json{{"war", true}}}};
+    zip.putText("relations.json", rel.dump());
+    REQUIRE(writeZip(odmap, zip, err));
+
+    World read;
+    Report r2;
+    REQUIRE(readOdMap(odmap, opt, read, r2));
+    const Nation* n = nationNamed(read, a);
+    REQUIRE(n != nullptr);
+    const auto it = n->relations.find(b);
+    REQUIRE(it != n->relations.end());
+    CHECK(it->second.at_war);
+
+    /* And it goes back out under the key the game reads. */
+    const std::string again = fixture::scratch("war-key-out.odmap");
+    Report r3;
+    REQUIRE(writeOdMap(again, read, opt, r3));
+    Zip back;
+    REQUIRE(readZip(again, back, err));
+    const Json written = Json::parse(back.text("relations.json"), nullptr, false);
+    REQUIRE(!written.is_discarded());
+    /* REQUIRE, not CHECK: indexing a key that is not there aborts on
+     * nlohmann's assert, which reports a crash instead of a failed test. */
+    REQUIRE(written.contains(a));
+    REQUIRE(written[a].contains(b));
+    CHECK(written[a][b].value("war", false));
+}
+
 int main() {
     testTheAxisKeepsItsSignAndScale();
     testTheAxisComesHomeUnchanged();
     testAValueChangedInGd5Wins();
     testAGuaranteeKeepsItsDirection();
     testANonAggressionPactIsReportedNotInvented();
+    testAWarWrittenTheGamesWayIsRead();
     return check::finish("test_politics");
 }

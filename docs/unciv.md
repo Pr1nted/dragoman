@@ -98,37 +98,46 @@ continents the game would cut apart and scatter, with nothing about the output
 looking wrong. `tests/test_unciv.cpp` writes the formula out a second time from
 the Kotlin and compares every tile; reinstating the old one fails 3999 of 4000.
 
-## Coming back is not implemented
+## Coming back
 
-Reading an Unciv map is refused, out loud, rather than done badly.
+The original rides **inside the map file**, under a top-level `dragoman` key.
+Unciv's loader is configured `ignoreUnknownFields = true` (`UncivJson.kt`), so
+it reads past the key without complaint, and there is no companion file for
+anybody to lose.
 
-Reading is not the mirror of writing. Writing loses the province boundaries;
-reading would have to invent them back by merging contiguous same-owner hexes
-into regions that never existed in that shape. The result would load, and would
-not be the map anybody drew.
+Reading restores that record and then reads the hexes for what **changed**: any
+tile whose base terrain differs from what this library would have written for
+the province beneath it is an edit, and the edit wins. An unedited map comes
+home exactly as it set out; an edited one comes home with the edits and
+everything a hexagon cannot hold — nations, names, scripts, population,
+province shapes — intact from the record.
 
-What makes the outward direction honest is that the original rides in the
-sidecar. Finishing the return trip needs two decisions this library has not
-made: where a sidecar lives beside a single JSON file, and what a player's edits
-**in Unciv** should mean when they come home — whether they win over the
-original, as a fort does, or are refused.
+The raster is carried as a PNG rather than rebuilt, because province *shapes*
+are precisely what a hex grid destroys.
 
-## Validating a map without the game
+A hex whose province had **no** terrain is skipped: it was given an invented
+climate on the way out, and adopting that back would quietly turn a latitude
+guess into map data.
+
+### The one thing that does not survive
+
+**A save from Unciv's own map editor.** libGDX serialises from the `TileMap`
+object, which has no field for this, so `json().toJson(tileMap)` writes a file
+without the record. Loading is safe; re-saving strips it.
+
+There is no way round that from this side. `TileMap.description` is the only
+free-text field Unciv round-trips, and it holds a short marker saying where the
+map came from — a megabyte of base64 there would be unreadable in the editor
+and probably unusable.
+
+So a stripped map is **refused, and named**, rather than answered with province
+boundaries invented by merging same-owner hexes into regions that never
+existed:
 
 ```
-tools/validate_unciv.py out.json /path/to/Unciv/android/assets/jsons/Civ*/Terrains.json
+unciv.stripped: this map carries no dragoman record, so it has been re-saved by
+Unciv itself ... only the terrain grid survives
 ```
-
-It checks the three things a converter gets wrong on its own: a terrain Unciv
-does not have, a **feature written as a base terrain** -- which fails the game's
-own ruleset validation and stops the map loading -- and tiles that are not where
-`HexMath` puts them, which scatters the continents while the file still looks
-well formed.
-
-The ruleset is passed in rather than vendored here. A copy in this repository
-would drift from the game silently, which is the failure the script exists to
-prevent. CI fetches Unciv's own and runs this over every map the suite writes;
-if the fetch fails it says so and skips, rather than passing quietly.
 
 ## Not yet verified in the game
 

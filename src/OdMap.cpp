@@ -184,7 +184,17 @@ bool readOdMap(const std::string& path, const Options& opt, World& world, Report
                 r.non_aggression = b.value().value("nonAggression", false);
                 r.guarantee = b.value().value("guarantee", false);
                 r.truce = b.value().value("truce", false);
-                r.at_war = b.value().value("atWar", false);
+                /* "war" is the key the GAME reads (Game_Loading.cpp) and the key
+                 * every shipped map is written with. This read "atWar" and
+                 * nothing else, so every war in an Open Doctrines map was
+                 * dropped on the way in -- thirty of them in the world map,
+                 * including Ukraine-Russia and India-Pakistan -- and the
+                 * conversion said nothing, because a relation that is never
+                 * read cannot be reported as lost.
+                 *
+                 * "atWar" is still accepted, because earlier versions of this
+                 * library wrote it and those maps exist. */
+                r.at_war = b.value().value("war", false) || b.value().value("atWar", false);
                 n->relations[b.key()] = r;
             }
         }
@@ -563,7 +573,7 @@ bool writeOdMap(const std::string& path, const World& world, const Options& opt,
             if (kv.second.non_aggression) r["nonAggression"] = true;
             if (kv.second.guarantee) r["guarantee"] = true;
             if (kv.second.truce) r["truce"] = true;
-            if (kv.second.at_war) r["atWar"] = true;
+            if (kv.second.at_war) r["war"] = true;  /* the key the game reads */
             if (!r.empty()) rel[kv.first] = r;
         }
         if (!rel.empty()) relations[n.key] = rel;
