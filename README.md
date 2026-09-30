@@ -173,7 +173,10 @@ an accessor per field.
   ABI. See [bindings/cpp/example.cpp](bindings/cpp/example.cpp).
 - **Python** — `pip install open-dragoman`. Pure ctypes, and the wheel carries the
   library, so no compiler is needed at install time.
-- **Anything else** — Rust, Go, C#, Java, Lua and WebAssembly all bind the same
+- **Java and Kotlin** — JNA, so there is no JNI shim to build and the floor is
+  Java 8 rather than Panama's 22. One API serves both languages. See
+  [bindings/jvm/README.md](bindings/jvm/README.md).
+- **Anything else** — Rust, Go, C#, Lua and WebAssembly all bind the same
   header. [docs/abi.md](docs/abi.md) documents the contract.
 
 ## Versioning
