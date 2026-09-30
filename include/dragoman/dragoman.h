@@ -68,7 +68,15 @@ DG_API int         dg_abi_version(void);
 typedef enum dg_format {
     DG_FORMAT_UNKNOWN = 0,
     DG_FORMAT_ODMAP   = 1,  /* Open Doctrines: one zip archive, `.odmap`      */
-    DG_FORMAT_GD5     = 2   /* Greater Diplomacy 5: a directory of files      */
+    DG_FORMAT_GD5     = 2,  /* Greater Diplomacy 5: a directory of files      */
+    /* Unciv: one JSON file holding a hex grid.
+     *
+     * NOT the same kind of thing as the other two, and the difference is not a
+     * detail. They paint provinces onto a raster; Unciv has a hexagon per
+     * place. Crossing is a RESAMPLING, so a map that goes out and comes back is
+     * the map the sidecar carried, not one rebuilt from hexes -- and writing
+     * one invents terrain a province map never had. See docs/unciv.md. */
+    DG_FORMAT_UNCIV   = 3
 } dg_format;
 
 /* Which of the two a path holds, by looking at it rather than at its name --

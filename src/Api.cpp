@@ -50,6 +50,7 @@ bool loadInto(const std::string& path, dg_format fmt, const Options& opt, World&
     int detected = fmt == DG_FORMAT_UNKNOWN ? detectFormat(path) : static_cast<int>(fmt);
     if (detected == 1) return readOdMap(path, opt, world, report);
     if (detected == 2) return readGd5Map(path, opt, world, report);
+    if (detected == 3) return readUncivMap(path, opt, world, report);
     setLastError(path + " is neither an Open Doctrines .odmap nor a GD5 map directory");
     return false;
 }
@@ -72,6 +73,7 @@ bool saveFrom(const World& world, const std::string& path, dg_format fmt, const 
               Report& report) {
     if (fmt == DG_FORMAT_ODMAP) return writeOdMap(path, world, opt, report);
     if (fmt == DG_FORMAT_GD5) return writeGd5Map(path, world, opt, report);
+    if (fmt == DG_FORMAT_UNCIV) return writeUncivMap(path, world, opt, report);
     setLastError("no such output format");
     return false;
 }
@@ -190,6 +192,7 @@ const char* dg_format_name(dg_format fmt) {
     switch (fmt) {
         case DG_FORMAT_ODMAP: return "odmap";
         case DG_FORMAT_GD5: return "gd5";
+        case DG_FORMAT_UNCIV: return "unciv";
         default: return "unknown";
     }
 }

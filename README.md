@@ -190,6 +190,14 @@ Each wraps the same ABI and each can get it wrong in its own way: the JVM
 binding read `dg_roundtrip_check` with `dg_convert`'s convention and reported a
 holding round trip as a failure, which compiled and looked correct.
 
+## More than two games
+
+Unciv is a third destination, and a different kind of one: it has a hexagon per
+place where the other two paint provinces onto a raster, so crossing is a
+resampling rather than a field mapping. Converting **to** Unciv works and
+produces a playable map; reading one back is refused rather than guessed at.
+See [docs/unciv.md](docs/unciv.md).
+
 ## Versioning
 
 Two numbers that move for different reasons:

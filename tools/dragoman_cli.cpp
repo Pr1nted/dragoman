@@ -17,8 +17,8 @@ void usage() {
         "dragoman %s -- Open Doctrines <-> Greater Diplomacy 5 map translation\n"
         "\n"
         "usage:\n"
-        "  dragoman convert <in> <out> [--to odmap|gd5] [options]\n"
-        "  dragoman roundtrip <map> [--to odmap|gd5] [options]\n"
+        "  dragoman convert <in> <out> [--to odmap|gd5|unciv] [options]\n"
+        "  dragoman roundtrip <map> [--to odmap|gd5|unciv] [options]\n"
         "  dragoman inspect <map> [--json]\n"
         "  dragoman detect <path>\n"
         "  dragoman version\n"
@@ -42,6 +42,7 @@ dg_format formatByName(const char* name) {
     if (!name) return DG_FORMAT_UNKNOWN;
     if (std::strcmp(name, "odmap") == 0 || std::strcmp(name, "od") == 0) return DG_FORMAT_ODMAP;
     if (std::strcmp(name, "gd5") == 0 || std::strcmp(name, "gd") == 0) return DG_FORMAT_GD5;
+    if (std::strcmp(name, "unciv") == 0) return DG_FORMAT_UNCIV;
     return DG_FORMAT_UNKNOWN;
 }
 

@@ -152,6 +152,19 @@ int detectFormat(const std::string& path) {
         }
         return 0;
     }
+    /* Unciv keeps a map as one JSON file, so this has to look inside rather
+     * than trust an extension: a .json is not distinctive and neither is the
+     * absence of one. A tileList of objects carrying a position is. */
+    if (fileExists(path) && !looksLikeZip(path)) {
+        std::vector<uint8_t> bytes;
+        if (readFile(path, bytes) && bytes.size() > 2 && bytes.size() < 64u * 1024 * 1024) {
+            const std::string head(bytes.begin(), bytes.begin() + std::min<size_t>(bytes.size(), 4096));
+            if (head.find("tileList") != std::string::npos
+                && head.find("mapParameters") != std::string::npos) {
+                return 3;
+            }
+        }
+    }
     if (!fileExists(path) || !looksLikeZip(path)) return 0;
 
     Zip zip;

@@ -66,6 +66,7 @@ set(DRAGOMAN_SOURCES
     src/Api.cpp
     src/Common.cpp
     src/Gd5Map.cpp
+    src/UncivMap.cpp
     src/ModelJson.cpp
     src/OdMap.cpp
     src/Raster.cpp
