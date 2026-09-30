@@ -139,11 +139,25 @@ jobs:
       # This is the only place build.zig runs. Its build runner cannot link on
       # a current macOS -- an empty build.zig fails there too -- so the file is
       # unexercised by hand and this job is what keeps it honest.
-      - uses: mlugg/setup-zig@v1
-        with:
-          version: 0.15.1
+      #
+      # Fetched straight from ziglang.org rather than through a setup action.
+      # The action was tried and its mirrors answered 404, 502 and 503 in one
+      # run -- a third party between this job and a tarball, failing for
+      # reasons that have nothing to do with this repository.
+      #
+      # NOTE THE ORDER IN THE FILENAME: zig-x86_64-linux-*, not
+      # zig-linux-x86_64-*. The other spelling 404s, and it is the one you
+      # would guess.
       - name: Zig binding
         run: |
+          set -e
+          ZIG=0.15.1
+          curl -sfL -o zig.tar.xz \
+            "https://ziglang.org/download/$ZIG/zig-x86_64-linux-$ZIG.tar.xz"
+          tar xf zig.tar.xz
+          export PATH="$PWD/zig-x86_64-linux-$ZIG:$PATH"
+          zig version
+
           cd bindings/zig
           zig build test \
             -Ddragoman-lib=$GITHUB_WORKSPACE/build \
