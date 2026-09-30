@@ -32,3 +32,11 @@ maps/
 
 # The Rust binding's build output.
 bindings/rust/target/
+
+# The Node binding's installed dependencies.
+bindings/js/node_modules/
+bindings/js/package-lock.json
+
+# The Zig binding's build output.
+bindings/zig/.zig-cache/
+bindings/zig/zig-out/

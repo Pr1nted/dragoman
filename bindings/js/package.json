@@ -1,0 +1,27 @@
+{
+  "name": "open-dragoman",
+  "version": "0.5.0",
+  "description": "Open Doctrines <-> Greater Diplomacy 5 map translation",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "koffi": "^3.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "typescript": "^7.0.2"
+  },
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "native/"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}

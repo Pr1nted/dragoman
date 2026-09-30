@@ -72,6 +72,83 @@ jobs:
   # CMake project. test_version asserts they agree, but it only runs where the
   # library builds; this job fails the pull request that changed three of the
   # four regardless.
+
+  # Every binding, against a library built here.
+  #
+  # Each one wraps the same flat ABI and each one can get it wrong in its own
+  # way -- the JVM binding read dg_roundtrip_check with dg_convert's convention
+  # and reported a holding round trip as a failure, which compiled and looked
+  # correct. A binding nothing runs is a binding that says what it did when it
+  # was written.
+  #
+  # Linux only, deliberately: what is being tested is the binding, not the
+  # platform, and the library itself is already built on three.
+  bindings:
+    name: bindings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the shared library
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DDRAGOMAN_BUILD_SHARED=ON \
+                -DDRAGOMAN_BUILD_TESTS=OFF -DDRAGOMAN_BUILD_CLI=OFF
+          cmake --build build -j
+
+      # ---- Java and Kotlin ----
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: JVM binding
+        run: |
+          set -e
+          JNA=5.14.0
+          curl -sfL -o jna.jar \
+            "https://repo1.maven.org/maven2/net/java/dev/jna/jna/$JNA/jna-$JNA.jar"
+          cd bindings/jvm
+          javac -source 8 -target 8 -nowarn -cp ../../jna.jar -d /tmp/jvm \
+                $(find src -name '*.java')
+          java -cp /tmp/jvm:../../jna.jar \
+               -Ddragoman.library.path=$GITHUB_WORKSPACE/build/libdragoman.so \
+               com.opendoctrines.dragoman.DragomanTest
+
+      # ---- Rust ----
+      - name: Rust binding
+        run: |
+          cd bindings/rust
+          DRAGOMAN_LIB_DIR=$GITHUB_WORKSPACE/build \
+          LD_LIBRARY_PATH=$GITHUB_WORKSPACE/build \
+          cargo test
+
+      # ---- JavaScript and TypeScript ----
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Node binding
+        run: |
+          cd bindings/js
+          npm install --no-audit --no-fund
+          DRAGOMAN_LIBRARY=$GITHUB_WORKSPACE/build/libdragoman.so npm test
+          # The types are hand-written, so nothing but a typechecker says
+          # whether they still match the JavaScript beside them.
+          npx tsc --noEmit
+
+      # ---- Zig ----
+      #
+      # This is the only place build.zig runs. Its build runner cannot link on
+      # a current macOS -- an empty build.zig fails there too -- so the file is
+      # unexercised by hand and this job is what keeps it honest.
+      - uses: mlugg/setup-zig@v1
+        with:
+          version: 0.15.1
+      - name: Zig binding
+        run: |
+          cd bindings/zig
+          zig build test \
+            -Ddragoman-lib=$GITHUB_WORKSPACE/build \
+            -Ddragoman-include=$GITHUB_WORKSPACE/include
+
   version-consistency:
     name: version consistency
     runs-on: ubuntu-latest

@@ -176,8 +176,19 @@ an accessor per field.
 - **Java and Kotlin** — JNA, so there is no JNI shim to build and the floor is
   Java 8 rather than Panama's 22. One API serves both languages. See
   [bindings/jvm/README.md](bindings/jvm/README.md).
-- **Anything else** — Rust, Go, C#, Lua and WebAssembly all bind the same
-  header. [docs/abi.md](docs/abi.md) documents the contract.
+- **Rust** — `dragoman::convert(..)`, no bindgen: the surface is small enough to
+  declare. See [bindings/rust/README.md](bindings/rust/README.md).
+- **JavaScript and TypeScript** — koffi, with hand-written types beside it. See
+  [bindings/js/README.md](bindings/js/README.md).
+- **Zig** — `@cImport` of the header itself, so there is no second copy of the
+  ABI at all. See [bindings/zig/README.md](bindings/zig/README.md).
+- **Anything else** — Go, C#, Lua and WebAssembly all bind the same header.
+  [docs/abi.md](docs/abi.md) documents the contract.
+
+Every binding is run against a freshly built library by CI's `bindings` job.
+Each wraps the same ABI and each can get it wrong in its own way: the JVM
+binding read `dg_roundtrip_check` with `dg_convert`'s convention and reported a
+holding round trip as a failure, which compiled and looked correct.
 
 ## Versioning
 
