@@ -29,3 +29,6 @@ dist/
 # pointed at from outside instead. See docs/roundtrip.md.
 maps/
 *.odmap
+
+# The Rust binding's build output.
+bindings/rust/target/

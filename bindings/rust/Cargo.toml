@@ -1,0 +1,16 @@
+[package]
+name = "open-dragoman"
+description = "Open Doctrines <-> Greater Diplomacy 5 map translation"
+license = "MIT"
+repository = "https://github.com/Pr1nted/dragoman"
+edition = "2021"
+# Kept in step with VERSION by tools/check_version.py.
+version = "0.5.0"
+
+[lib]
+name = "dragoman"
+path = "src/lib.rs"
+
+[dependencies]
+
+[build-dependencies]

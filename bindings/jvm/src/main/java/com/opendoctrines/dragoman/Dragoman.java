@@ -77,14 +77,26 @@ public final class Dragoman {
     /**
      * Convert a map out and back and check it returned unchanged, writing
      * nothing permanent. The property the whole library is for.
+     *
+     * <p>Note the return type. This call does NOT use the same convention as
+     * {@link #convert}: see {@link RoundTrip}.
      */
-    public static Result roundTripCheck(File path, Format to, Options options) {
+    public static RoundTrip roundTripCheck(File path, Format to, Options options) {
         if (path == null) throw new IllegalArgumentException("path");
+        if (to == null || to == Format.UNKNOWN) {
+            throw new IllegalArgumentException("a target format is required");
+        }
         if (options == null) options = Options.defaults();
         final PointerByReference report = new PointerByReference();
+        // 1 identical, 0 differed, -1 could not run.
         final int rc = Native.lib().dg_roundtrip_check(path.getPath(), to.code(),
                                                        options.toNative(), report);
-        return collect(rc == 0, report.getValue(), rc);
+        final Result r = collect(rc >= 0, report.getValue(), rc);
+        final RoundTrip.Outcome outcome =
+            rc == 1 ? RoundTrip.Outcome.IDENTICAL
+                    : rc == 0 ? RoundTrip.Outcome.DIFFERED
+                              : RoundTrip.Outcome.FAILED;
+        return new RoundTrip(outcome, r.notes(), r.worst());
     }
 
     /**

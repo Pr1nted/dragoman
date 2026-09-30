@@ -108,6 +108,15 @@ public final class DragomanTest {
         for (Note n : notes) coded = coded && !n.code().isEmpty() && !n.message().isEmpty();
         check(coded, "every note has both a code and a message");
         System.out.println("        worst severity: " + r.worst());
+
+        // NOT read the way convert() is read. dg_roundtrip_check returns 1 for
+        // identical, 0 for a difference and -1 for a check that could not run,
+        // so treating 0 as success -- as the rest of the ABI does -- calls a
+        // holding round trip a failure. The Rust binding's test caught exactly
+        // that, in code that had already shipped here.
+        RoundTrip rt = Dragoman.roundTripCheck(map, to, Options.defaults());
+        checkEq(rt.outcome(), RoundTrip.Outcome.IDENTICAL,
+                "the map comes back unchanged (and 1, not 0, means identical)");
     }
 
     public static void main(String[] args) throws Exception {
