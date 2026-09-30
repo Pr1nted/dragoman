@@ -73,6 +73,49 @@ jobs:
   # library builds; this job fails the pull request that changed three of the
   # four regardless.
 
+  # A map this library writes, against the ruleset the game validates it with.
+  #
+  # Not a substitute for opening one in Unciv, and the job says so. It catches
+  # what a converter gets wrong on its own: a terrain Unciv does not have, a
+  # FEATURE written as a base terrain -- which fails the game's own validation
+  # and stops the map loading -- and tiles that are not where HexMath puts
+  # them, which scatters the continents while the file still looks well formed.
+  #
+  # The ruleset is fetched rather than vendored. A copy here would drift from
+  # the game silently, which is the failure this is meant to prevent.
+  unciv:
+    name: unciv ruleset
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DDRAGOMAN_BUILD_TESTS=ON
+          cmake --build build -j
+      - name: Write maps and check them
+        run: |
+          set -e
+          # The suite writes one map per terrain case into its scratch
+          # directory, which is a wider set of terrains than any single
+          # conversion produces.
+          ctest --test-dir build -R test_unciv --output-on-failure
+
+          base="https://raw.githubusercontent.com/yairm210/Unciv/master/android/assets/jsons"
+          ok=0
+          for rs in "Civ%20V%20-%20Vanilla" "Civ%20V%20-%20Gods%20%26%20Kings"; do
+            if curl -sfL "$base/$rs/Terrains.json" -o "rs-$ok.json"; then
+              ok=$((ok+1))
+            fi
+          done
+          if [ "$ok" -eq 0 ]; then
+            echo "::warning::could not fetch Unciv's ruleset, so the maps were not validated"
+            exit 0
+          fi
+
+          for map in build/test-scratch/unciv-*.json; do
+            python3 tools/validate_unciv.py "$map" rs-*.json
+          done
+
   # Every binding, against a library built here.
   #
   # Each one wraps the same flat ABI and each one can get it wrong in its own

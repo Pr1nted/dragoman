@@ -114,7 +114,7 @@ HexCoord hexFromColumnRow(int column, int row) {
 /* ------------------------------------------------------- model -> Unciv */
 
 bool writeUncivMap(const std::string& path, const World& world, const Options& opt,
-                   Report& report) {
+                   Report& report, int columns_in, int rows_in) {
     if (world.width <= 0 || world.height <= 0 || world.raster.empty()) {
         setLastError("the world has no province raster to resample");
         return false;
@@ -131,16 +131,19 @@ bool writeUncivMap(const std::string& path, const World& world, const Options& o
      * over the pixels it covers. A vote sounds better and is worse here: it
      * dissolves every province narrower than the sample step, and on a world
      * map that is most islands and most of Europe. */
-    /* Fixed, and not an option, because dg_options is a struct the CALLER
-     * allocates: every binding declares its six ints, and a seventh field
-     * would have them pass a struct smaller than the library reads. That is an
-     * ABI break for a map size, so the size waits for a release that has other
-     * reasons to bump the ABI.
+    /* The size comes from dg_convert_unciv when a caller asked for one, and
+     * otherwise is Unciv's "Huge" -- the largest a world has any chance of
+     * surviving into, and so the least bad default for a world map.
      *
-     * 80x50 is Unciv's "Huge" rectangular map, which is the largest a world
-     * has any chance of surviving into. */
-    const int columns = 80;
-    const int rows = 50;
+     * It is a separate CALL and not a field on dg_options, because that struct
+     * is allocated by the caller and every binding declares its six ints; a
+     * seventh would have them hand over a struct smaller than the library
+     * reads. See dg_convert_unciv.
+     *
+     * Clamped rather than refused: below four hexes there is no world to speak
+     * of, and above two hundred no build of the game will open it. */
+    const int columns = std::max(4, std::min(columns_in > 0 ? columns_in : 80, 200));
+    const int rows = std::max(4, std::min(rows_in > 0 ? rows_in : 50, 200));
 
     std::map<int64_t, const Province*> byId;
     for (const auto& p : world.provinces) byId[p.id] = &p;

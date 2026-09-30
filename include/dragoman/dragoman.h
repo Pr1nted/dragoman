@@ -166,6 +166,27 @@ DG_API int dg_save(const dg_world* w, const char* path, dg_format fmt,
 DG_API int dg_convert(const char* in_path, const char* out_path, dg_format to,
                       const dg_options* opts, dg_report** out_report);
 
+/* Convert to Unciv at a chosen grid size.
+ *
+ * A SEPARATE CALL rather than a field on dg_options, and that is an ABI
+ * decision rather than a stylistic one. dg_options is a struct the CALLER
+ * allocates: every binding declares its six ints, so a seventh field would
+ * have them pass a struct smaller than the library reads, and the library
+ * would read past the end of it. Adding a function breaks nobody -- an older
+ * caller simply never calls it.
+ *
+ * `columns` and `rows` are hexes. Unciv's own sizes run from 24x15 (Tiny) to
+ * 80x50 (Huge); dg_convert uses 80x50. Both are clamped to 4..200, because a
+ * grid below the smaller is not a world and one above the larger is a map no
+ * build of the game will open.
+ *
+ * Zero for either means the default, so dg_convert_unciv(in, out, 0, 0, ...)
+ * is dg_convert(in, out, DG_FORMAT_UNCIV, ...).
+ */
+DG_API int dg_convert_unciv(const char* in_path, const char* out_path,
+                            int columns, int rows,
+                            const dg_options* opts, dg_report** out_report);
+
 /* Convert to `to` and back, and report whether the result is byte-identical
  * to the input. Returns 1 for identical, 0 for a difference, -1 on failure.
  * This is the property the test suite asserts, exposed so callers can assert

@@ -319,6 +319,34 @@ int dg_convert(const char* in_path, const char* out_path, dg_format to, const dg
     return rc;
 }
 
+int dg_convert_unciv(const char* in_path, const char* out_path, int columns, int rows,
+                     const dg_options* opts, dg_report** out_report) {
+    auto* report = new (std::nothrow) dg_report();
+    if (out_report) *out_report = report;
+    if (!in_path || !out_path || !report) {
+        setLastError("dg_convert_unciv needs an input and an output path");
+        return 1;
+    }
+    int rc = 0;
+    try {
+        const Options opt = fromC(opts);
+        World world;
+        if (!loadInto(in_path, DG_FORMAT_UNKNOWN, opt, world, report->r)) {
+            rc = 1;
+        } else {
+            /* No bridgeScripts: Unciv has no counterpart for either shape of
+             * script, so generating one would be work whose output nothing
+             * reads. */
+            rc = writeUncivMap(out_path, world, opt, report->r, columns, rows) ? 0 : 1;
+        }
+    } catch (const std::exception& ex) {
+        setLastError(std::string("conversion failed: ") + ex.what());
+        rc = 1;
+    }
+    if (!out_report) delete report;
+    return rc;
+}
+
 int dg_roundtrip_check(const char* path, dg_format to, const dg_options* opts,
                        dg_report** out_report) {
     auto* report = new (std::nothrow) dg_report();

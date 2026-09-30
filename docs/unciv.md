@@ -43,6 +43,28 @@ six land bases — Grassland, Plains, Tundra, Desert, Mountain, Snow. Writing
 `Hill` as a base gives a map whose ruleset validation fails and which the game
 will not start.
 
+## Choosing the grid size
+
+`dg_convert` writes 80x50, Unciv's "Huge" -- the largest a world has any chance
+of surviving into. For any other size:
+
+```c
+dg_convert_unciv(in, out, 40, 25, &opts, &report);
+```
+
+A separate CALL rather than a field on `dg_options`, and that is an ABI
+decision. `dg_options` is allocated by the caller, and every binding declares
+its six ints; a seventh field would have them hand over a struct smaller than
+the library reads, and the library would read past the end of it. Adding a
+function breaks nobody -- an older caller simply never calls it.
+
+Sizes are clamped to 4..200 rather than refused: below four hexes there is no
+world to speak of, and above two hundred no build of the game will open it.
+`dg_convert_unciv(in, out, 1, 1, ...)` gives 4x4; `999, 999` gives 200x200.
+
+The smaller the grid, the more of the world disappears -- at 24x15 a hex covers
+roughly 340x270 source pixels, and the British Isles are gone.
+
 ## Terrain that is invented, and says so
 
 Open Doctrines stores no terrain at all: its raster says land or sea and nothing
@@ -90,6 +112,23 @@ sidecar. Finishing the return trip needs two decisions this library has not
 made: where a sidecar lives beside a single JSON file, and what a player's edits
 **in Unciv** should mean when they come home — whether they win over the
 original, as a fort does, or are refused.
+
+## Validating a map without the game
+
+```
+tools/validate_unciv.py out.json /path/to/Unciv/android/assets/jsons/Civ*/Terrains.json
+```
+
+It checks the three things a converter gets wrong on its own: a terrain Unciv
+does not have, a **feature written as a base terrain** -- which fails the game's
+own ruleset validation and stops the map loading -- and tiles that are not where
+`HexMath` puts them, which scatters the continents while the file still looks
+well formed.
+
+The ruleset is passed in rather than vendored here. A copy in this repository
+would drift from the game silently, which is the failure the script exists to
+prevent. CI fetches Unciv's own and runs this over every map the suite writes;
+if the fetch fails it says so and skips, rather than passing quietly.
 
 ## Not yet verified in the game
 

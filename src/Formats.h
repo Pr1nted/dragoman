@@ -62,7 +62,8 @@ bool writeGd5Map(const std::string& path, const World& world, const Options& opt
 
 /* Unciv. A resampling rather than a field mapping -- see UncivMap.cpp. */
 bool readUncivMap(const std::string& path, const Options& opt, World& world, Report& report);
-bool writeUncivMap(const std::string& path, const World& world, const Options& opt, Report& report);
+bool writeUncivMap(const std::string& path, const World& world, const Options& opt,
+                   Report& report, int columns = 0, int rows = 0);
 
 /* Which game a path holds, decided by content. */
 int detectFormat(const std::string& path);
