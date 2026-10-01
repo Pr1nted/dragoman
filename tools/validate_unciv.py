@@ -74,15 +74,30 @@ def check(map_path, ruleset_path, name):
     W, H = size.get("width", 0), size.get("height", 0)
     if W * H != len(tiles):
         problems.append(f"mapSize says {W}x{H}={W*H} but there are {len(tiles)} tiles")
+    # Columns and rows are CENTRED ON THE ORIGIN, the way
+    # TileMap(width, height, ruleset, worldWrap) lays a rectangular map out:
+    # column -W/2..(W-1)/2, row -H/2..(H-1)/2. A grid numbered from zero loads
+    # in the map editor and throws in GameStarter, because setTransients only
+    # checks the extent on its SECOND call. Python floors on negative division
+    # where Kotlin truncates, so negate after dividing.
+    col_min, row_min = -(W // 2), -(H // 2)
     wrong = 0
     for i, t in enumerate(tiles):
-        row, col = divmod(i, W) if W else (0, 0)
-        want = unciv_hex(col, row)
+        ri, ci = divmod(i, W) if W else (0, 0)
+        want = unciv_hex(ci + col_min, ri + row_min)
         got = (t["position"]["x"], t["position"]["y"])
         if want != got:
             wrong += 1
     if wrong:
         problems.append(f"{wrong} of {len(tiles)} tiles are not where HexMath puts them")
+
+    # The extent check setTransients makes from its second call onwards.
+    xs = [t["position"]["x"] for t in tiles]
+    left_x, right_x = min(xs), max(xs)
+    if not (-2 * left_x) <= (right_x - left_x + 1) <= (3 - 2 * left_x):
+        problems.append(
+            f"x runs {left_x}..{right_x}, which setTransients rejects on its "
+            f"second call -- the grid is not centred on the origin")
     if len({(t['position']['x'], t['position']['y']) for t in tiles}) != len(tiles):
         problems.append("two tiles share a hex")
 
