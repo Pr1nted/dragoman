@@ -7,7 +7,15 @@ public enum Format {
     /** Open Doctrines: one zip archive, {@code .odmap}. */
     ODMAP(1),
     /** Greater Diplomacy 5: a directory of files. */
-    GD5(2);
+    GD5(2),
+    /**
+     * Unciv: one JSON file holding a hex grid.
+     *
+     * <p>Not the same kind of thing as the other two. They paint provinces
+     * onto a raster; Unciv has a hexagon per place, so crossing is a
+     * RESAMPLING. Use {@link Dragoman#convertUnciv} to choose the grid.
+     */
+    UNCIV(3);
 
     private final int code;
 

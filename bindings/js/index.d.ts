@@ -13,8 +13,10 @@ export const Format: {
   readonly ODMAP: 1;
   /** Greater Diplomacy 5: a directory of files. */
   readonly GD5: 2;
+  /** Unciv: one JSON file holding a hex grid. Crossing is a resampling. */
+  readonly UNCIV: 3;
 };
-export type Format = 0 | 1 | 2;
+export type Format = 0 | 1 | 2 | 3;
 
 /** How much a note matters. */
 export const Severity: {
@@ -104,6 +106,15 @@ export function detect(path: string): Format;
 
 /** Convert a map to `to`. */
 export function convert(input: string, output: string, to: Format, options?: Options): Result;
+
+/**
+ * Convert to Unciv's format, choosing the hex grid. Unciv's own sizes run from
+ * 24x15 (Tiny) to 80x50 (Huge); zero for either takes the default of 80x50.
+ * Both are clamped to 4..200.
+ */
+export function convertUnciv(
+  input: string, output: string, columns?: number, rows?: number, options?: Options
+): Result;
 
 /**
  * Convert a map out and back and check it returned unchanged.

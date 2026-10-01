@@ -74,6 +74,32 @@ public final class Dragoman {
         return collect(rc == 0, report.getValue(), rc);
     }
 
+    /** Convert to Unciv's format with the library's default grid and options. */
+    public static Result convertUnciv(File in, File out) {
+        return convertUnciv(in, out, 0, 0, Options.defaults());
+    }
+
+    /**
+     * Convert to Unciv's format, choosing the hex grid.
+     *
+     * <p>Unciv's own sizes run from 24x15 (Tiny) to 80x50 (Huge). Zero for
+     * either takes the library's default of 80x50, so
+     * {@code convertUnciv(in, out)} is {@code convert(in, out, Format.UNCIV)}.
+     * Both are clamped to 4..200.
+     */
+    public static Result convertUnciv(File in, File out, int columns, int rows,
+                                      Options options) {
+        if (in == null) throw new IllegalArgumentException("in");
+        if (out == null) throw new IllegalArgumentException("out");
+        if (options == null) options = Options.defaults();
+
+        final PointerByReference report = new PointerByReference();
+        final int rc = Native.lib().dg_convert_unciv(in.getPath(), out.getPath(),
+                                                     columns, rows,
+                                                     options.toNative(), report);
+        return collect(rc == 0, report.getValue(), rc);   // zero is success
+    }
+
     /**
      * Convert a map out and back and check it returned unchanged, writing
      * nothing permanent. The property the whole library is for.

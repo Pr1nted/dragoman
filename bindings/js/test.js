@@ -47,6 +47,31 @@ test('a failed conversion says why', () => {
   assert.strictEqual(fs.existsSync(out), false, 'it wrote something anyway');
 });
 
+// Unciv is reachable, and the grid size is honoured.
+//
+// Its own test because Unciv arrived in the C ABI and in NO binding: convert()
+// here REFUSED anything that was not ODMAP or GD5, so a format the library had
+// supported for a release could not be asked for at all.
+test('unciv is reachable and the grid is honoured',
+     { skip: !process.env.DRAGOMAN_TEST_MAP && 'set DRAGOMAN_TEST_MAP to run' }, () => {
+  const map = process.env.DRAGOMAN_TEST_MAP;
+  assert.equal(d.Format.UNCIV, 3, "the ABI's code for Unciv");
+  if (d.detect(map) !== d.Format.ODMAP) return;
+
+  const out = path.join(os.tmpdir(), `dragoman-js-unciv-${process.pid}.json`);
+  try {
+    const r = d.convertUnciv(map, out, 24, 15);
+    assert.ok(r.ok, 'it converts to Unciv');
+    const text = fs.readFileSync(out, 'utf8');
+    // 24x15 is Unciv's "Tiny". Counting positions keeps the test free of a
+    // JSON parse of a file that can be megabytes.
+    const tiles = text.split('"position"').length - 1;
+    assert.equal(tiles, 24 * 15, 'the grid size was honoured');
+  } finally {
+    fs.rmSync(out, { force: true });
+  }
+});
+
 test('a real map converts and returns', { skip: !process.env.DRAGOMAN_TEST_MAP && 'set DRAGOMAN_TEST_MAP to run' }, () => {
   const map = process.env.DRAGOMAN_TEST_MAP;
   const from = d.detect(map);

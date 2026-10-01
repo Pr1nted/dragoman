@@ -119,6 +119,32 @@ public final class DragomanTest {
                 "the map comes back unchanged (and 1, not 0, means identical)");
     }
 
+    /**
+     * Unciv is reachable, and the grid size is honoured.
+     *
+     * Its own test because Unciv arrived in the C ABI and in NO binding: this
+     * one had no Format.UNCIV at all, so a format the library had supported
+     * for a release was one no JVM caller could name.
+     */
+    private static void testUncivIsReachable(File map) throws Exception {
+        checkEq(Format.UNCIV.code(), 3, "the ABI's code for Unciv");
+        if (Dragoman.detect(map) != Format.ODMAP) {
+            System.out.println("  skip  the Unciv grid: the test map is not an .odmap");
+            return;
+        }
+        File out = File.createTempFile("dragoman-jvm-unciv", ".json");
+        out.deleteOnExit();
+        Result r = Dragoman.convertUnciv(map, out, 24, 15, Options.defaults());
+        check(r.ok(), "it converts to Unciv");
+        if (!r.ok()) return;
+
+        String json = new String(java.nio.file.Files.readAllBytes(out.toPath()), "UTF-8");
+        // 24x15 is Unciv's "Tiny". Counting positions keeps this free of a
+        // JSON parser the binding does not otherwise need.
+        int tiles = json.split("\"position\"", -1).length - 1;
+        checkEq(tiles, 24 * 15, "the grid size was honoured");
+    }
+
     public static void main(String[] args) throws Exception {
         System.out.println("=== the JVM binding ===");
         testTheLibraryLoadsAndAgreesOnTheAbi();
@@ -131,6 +157,7 @@ public final class DragomanTest {
             System.out.println("  skip  a real conversion: set -Ddragoman.test.map=<a map> to run it");
         } else {
             testARealConversion(new File(mapPath));
+            testUncivIsReachable(new File(mapPath));
         }
 
         System.out.println(failures == 0 ? "all passed" : failures + " failed");

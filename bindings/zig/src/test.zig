@@ -43,6 +43,41 @@ test "a failed conversion is an error" {
     try std.testing.expect(dragoman.lastError().len > 0);
 }
 
+// Unciv is reachable, and the grid size is honoured.
+//
+// Its own test because Unciv arrived in the C ABI and in NO binding: this one
+// had no `.unciv` at all, so a format the library had supported for a release
+// was one no Zig caller could name.
+test "unciv is reachable and the grid is honoured" {
+    const a = std.testing.allocator;
+    const map = std.process.getEnvVarOwned(a, "DRAGOMAN_TEST_MAP") catch {
+        std.debug.print("skip: set DRAGOMAN_TEST_MAP=<a map> to run a real conversion\n", .{});
+        return;
+    };
+    defer a.free(map);
+
+    if (try dragoman.detect(a, map) != .odmap) {
+        std.debug.print("skip: DRAGOMAN_TEST_MAP is not an .odmap\n", .{});
+        return;
+    }
+
+    const out = "/tmp/dragoman-zig-unciv.json";
+    std.fs.cwd().deleteFile(out) catch {};
+    defer std.fs.cwd().deleteFile(out) catch {};
+
+    var outcome = try dragoman.convertUnciv(a, map, out, 24, 15, .{});
+    defer outcome.deinit();
+
+    const text = try std.fs.cwd().readFileAlloc(a, out, 64 * 1024 * 1024);
+    defer a.free(text);
+    // 24x15 is Unciv's "Tiny". Counting positions keeps this free of a JSON
+    // parser the binding does not otherwise need.
+    var tiles: usize = 0;
+    var i: usize = 0;
+    while (std.mem.indexOfPos(u8, text, i, "\"position\"")) |at| : (i = at + 1) tiles += 1;
+    try std.testing.expectEqual(@as(usize, 24 * 15), tiles);
+}
+
 test "a real map converts and returns" {
     const a = std.testing.allocator;
     const map = std.process.getEnvVarOwned(a, "DRAGOMAN_TEST_MAP") catch {

@@ -37,6 +37,12 @@ pub enum Format {
     Odmap,
     /// Greater Diplomacy 5: a directory of files.
     Gd5,
+    /// Unciv: one JSON file holding a hex grid.
+    ///
+    /// Not the same kind of thing as the other two. They paint provinces onto
+    /// a raster; Unciv has a hexagon per place, so crossing is a RESAMPLING.
+    /// Use [`convert_unciv`] to choose the grid.
+    Unciv,
 }
 
 impl Format {
@@ -45,6 +51,7 @@ impl Format {
             Format::Unknown => 0,
             Format::Odmap => 1,
             Format::Gd5 => 2,
+            Format::Unciv => 3,
         }
     }
 
@@ -52,6 +59,7 @@ impl Format {
         match code {
             1 => Format::Odmap,
             2 => Format::Gd5,
+            3 => Format::Unciv,
             _ => Format::Unknown,
         }
     }
@@ -226,6 +234,34 @@ pub fn convert(
         ffi::dg_convert(input.as_ptr(), output.as_ptr(), to.code(), &opts, &mut report)
     };
     finish(rc == 0, report)
+}
+
+/// Convert to Unciv's format, choosing the hex grid.
+///
+/// Unciv's own sizes run from 24x15 (Tiny) to 80x50 (Huge). Zero for either
+/// takes the library's default of 80x50, so `convert_unciv(i, o, 0, 0, opts)`
+/// is `convert(i, o, Format::Unciv, opts)`. Both are clamped to 4..200.
+///
+/// Its own entry point rather than a field on [`Options`]: `dg_options` is
+/// allocated by the caller, so a field added to it would break this binding's
+/// ABI along with every other one.
+pub fn convert_unciv(
+    input: impl AsRef<Path>,
+    output: impl AsRef<Path>,
+    columns: i32,
+    rows: i32,
+    options: Options,
+) -> Result<Outcome, Error> {
+    let input = path_to_c(input.as_ref()).map_err(|e| bare(e))?;
+    let output = path_to_c(output.as_ref()).map_err(|e| bare(e))?;
+    let opts = options.to_ffi();
+    let mut report: *mut ffi::DgReport = std::ptr::null_mut();
+    let rc = unsafe {
+        ffi::dg_convert_unciv(
+            input.as_ptr(), output.as_ptr(), columns, rows, &opts, &mut report,
+        )
+    };
+    finish(rc == 0, report)   // zero is success, as everywhere in this ABI
 }
 
 /// Whether a map came back the way it set out.

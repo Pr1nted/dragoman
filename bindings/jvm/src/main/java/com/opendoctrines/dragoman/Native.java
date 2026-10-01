@@ -55,6 +55,11 @@ interface Native extends Library {
     void dg_options_defaults(DgOptions out);
 
     int dg_convert(String inPath, String outPath, int to, DgOptions opts, PointerByReference report);
+    // Its own entry point rather than a field on dg_options: that struct is
+    // allocated by the caller, so a field added to it would break this
+    // binding's ABI along with every other one.
+    int dg_convert_unciv(String inPath, String outPath, int columns, int rows,
+                         DgOptions opts, PointerByReference report);
     int dg_roundtrip_check(String path, int to, DgOptions opts, PointerByReference report);
 
     int dg_report_count(Pointer report);

@@ -31,6 +31,14 @@ const Format = Object.freeze({
   ODMAP: 1,
   /** Greater Diplomacy 5: a directory of files. */
   GD5: 2,
+  /**
+   * Unciv: one JSON file holding a hex grid.
+   *
+   * Not the same kind of thing as the other two. They paint provinces onto a
+   * raster; Unciv has a hexagon per place, so crossing is a RESAMPLING. Use
+   * convertUnciv() to choose the grid.
+   */
+  UNCIV: 3,
 });
 
 /** How much a note matters. */
@@ -113,6 +121,9 @@ function load(libraryPath) {
     dg_detect: native.func('int dg_detect(const char*)'),
     dg_options_defaults: native.func('void dg_options_defaults(_Out_ dg_options*)'),
     dg_convert: native.func('int dg_convert(const char*, const char*, int, const dg_options*, _Out_ void**)'),
+    // Its own entry point rather than a field on dg_options: that struct is
+    // allocated by the caller, so a field added to it would break the ABI.
+    dg_convert_unciv: native.func('int dg_convert_unciv(const char*, const char*, int, int, const dg_options*, _Out_ void**)'),
     dg_roundtrip_check: native.func('int dg_roundtrip_check(const char*, int, const dg_options*, _Out_ void**)'),
     dg_report_count: native.func('int dg_report_count(void*)'),
     dg_report_severity: native.func('int dg_report_severity(void*, int)'),
@@ -211,8 +222,9 @@ function collect(raw) {
  */
 function convert(input, output, to, options) {
   const l = load();
-  if (to !== Format.ODMAP && to !== Format.GD5) {
-    throw new Error('a target format is required (Format.ODMAP or Format.GD5)');
+  if (to !== Format.ODMAP && to !== Format.GD5 && to !== Format.UNCIV) {
+    throw new Error(
+      'a target format is required (Format.ODMAP, Format.GD5 or Format.UNCIV)');
   }
   const out = [null];
   // ZERO IS SUCCESS. It is the C convention, and reading it the other way makes
@@ -230,6 +242,31 @@ function convert(input, output, to, options) {
     return { ok: false, notes, worst: Severity.ERROR };
   }
   return { ok: rc === 0, notes, worst };
+}
+
+/**
+ * Convert to Unciv's format, choosing the hex grid.
+ *
+ * Unciv's own sizes run from 24x15 (Tiny) to 80x50 (Huge). Zero for either
+ * takes the library's default of 80x50, so convertUnciv(i, o) is
+ * convert(i, o, Format.UNCIV). Both are clamped to 4..200.
+ */
+function convertUnciv(input, output, columns = 0, rows = 0, options) {
+  const l = load();
+  const out = [null];
+  const rc = l.dg_convert_unciv(
+    String(input), String(output), columns | 0, rows | 0, toNative(options), out);
+  const { notes, worst } = collect(out[0]);
+  if (rc !== 0 && notes.length === 0) {
+    const err = l.dg_last_error();
+    notes.push({
+      severity: Severity.ERROR,
+      code: 'dragoman.failed',
+      message: err || `the conversion failed without saying why (code ${rc})`,
+    });
+    return { ok: false, notes, worst: Severity.ERROR };
+  }
+  return { ok: rc === 0, notes, worst };   // zero is success
 }
 
 /**
@@ -260,5 +297,6 @@ module.exports = {
   defaultOptions,
   detect,
   convert,
+  convertUnciv,
   roundTripCheck,
 };

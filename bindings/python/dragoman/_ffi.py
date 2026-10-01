@@ -103,6 +103,11 @@ def declare(lib):
         "dg_load": ([s, c.c_int, c.POINTER(Options), c.POINTER(p)], p),
         "dg_save": ([p, s, c.c_int, c.POINTER(Options), c.POINTER(p)], c.c_int),
         "dg_convert": ([s, s, c.c_int, c.POINTER(Options), c.POINTER(p)], c.c_int),
+        # Its own entry point rather than a field on dg_options: that struct is
+        # allocated by the caller, so a field added to it would break this
+        # binding's ABI along with every other one.
+        "dg_convert_unciv": ([s, s, c.c_int, c.c_int, c.POINTER(Options), c.POINTER(p)],
+                             c.c_int),
         "dg_roundtrip_check": ([s, c.c_int, c.POINTER(Options), c.POINTER(p)], c.c_int),
         "dg_world_free": ([p], None),
         "dg_world_province_count": ([p], c.c_int),

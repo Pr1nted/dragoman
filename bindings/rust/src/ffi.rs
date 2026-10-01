@@ -40,6 +40,15 @@ extern "C" {
         out_report: *mut *mut DgReport,
     ) -> c_int;
 
+    pub(crate) fn dg_convert_unciv(
+        in_path: *const c_char,
+        out_path: *const c_char,
+        columns: c_int,
+        rows: c_int,
+        opts: *const DgOptions,
+        out_report: *mut *mut DgReport,
+    ) -> c_int;
+
     pub(crate) fn dg_roundtrip_check(
         path: *const c_char,
         to: c_int,

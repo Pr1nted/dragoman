@@ -27,11 +27,18 @@ pub const Format = enum(c_int) {
     odmap = 1,
     /// Greater Diplomacy 5: a directory of files.
     gd5 = 2,
+    /// Unciv: one JSON file holding a hex grid.
+    ///
+    /// Not the same kind of thing as the other two. They paint provinces onto
+    /// a raster; Unciv has a hexagon per place, so crossing is a RESAMPLING.
+    /// Use `convertUnciv` to choose the grid.
+    unciv = 3,
 
     pub fn fromCode(code: c_int) Format {
         return switch (code) {
             1 => .odmap,
             2 => .gd5,
+            3 => .unciv,
             else => .unknown,
         };
     }
@@ -195,6 +202,40 @@ pub fn convert(
     var outcome = try collect(allocator, report);
     errdefer outcome.deinit();
     if (rc != 0) {
+        outcome.deinit();
+        return Error.ConversionFailed;
+    }
+    return outcome;
+}
+
+/// Convert to Unciv's format, choosing the hex grid.
+///
+/// Unciv's own sizes run from 24x15 (Tiny) to 80x50 (Huge). Zero for either
+/// takes the library's default of 80x50, so `convertUnciv(a, i, o, 0, 0, .{})`
+/// is `convert(a, i, o, .unciv, .{})`. Both are clamped to 4..200.
+///
+/// Its own entry point rather than a field on `Options`: `dg_options` is
+/// allocated by the caller, so a field added to it would break this binding's
+/// ABI along with every other one.
+pub fn convertUnciv(
+    allocator: std.mem.Allocator,
+    input: []const u8,
+    output: []const u8,
+    columns: c_int,
+    rows: c_int,
+    options: Options,
+) Error!Outcome {
+    const in_z = try allocator.dupeZ(u8, input);
+    defer allocator.free(in_z);
+    const out_z = try allocator.dupeZ(u8, output);
+    defer allocator.free(out_z);
+
+    var opts = options.toC();
+    var report: ?*c.dg_report = null;
+    const rc = c.dg_convert_unciv(in_z.ptr, out_z.ptr, columns, rows, &opts, &report);
+    var outcome = try collect(allocator, report);
+    errdefer outcome.deinit();
+    if (rc != 0) {   // zero is success, as everywhere in this ABI
         outcome.deinit();
         return Error.ConversionFailed;
     }

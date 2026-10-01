@@ -66,8 +66,10 @@ class Format:
     UNKNOWN = 0
     ODMAP = 1
     GD5 = 2
+    UNCIV = 3
 
-    _BY_NAME = {"odmap": ODMAP, "od": ODMAP, "gd5": GD5, "gd": GD5, "unknown": UNKNOWN}
+    _BY_NAME = {"odmap": ODMAP, "od": ODMAP, "gd5": GD5, "gd": GD5,
+                "unciv": UNCIV, "unknown": UNKNOWN}
 
     @classmethod
     def parse(cls, value: Union[int, str, None]) -> int:
@@ -77,7 +79,8 @@ class Format:
             return value
         key = value.strip().lower()
         if key not in cls._BY_NAME:
-            raise ValueError(f"unknown format {value!r}; use 'odmap' or 'gd5'")
+            raise ValueError(
+                f"unknown format {value!r}; use 'odmap', 'gd5' or 'unciv'")
         return cls._BY_NAME[key]
 
     @staticmethod
@@ -309,7 +312,8 @@ def convert(src: str, dst: str, to: Union[int, str, None] = None, **options) -> 
     if to is None:
         found = _library().dg_detect(str(src).encode())
         if found == Format.UNKNOWN:
-            raise DragomanError(f"cannot tell what {src} is; pass to='odmap' or to='gd5'")
+            raise DragomanError(
+                f"cannot tell what {src} is; pass to='odmap', to='gd5' or to='unciv'")
         to = Format.GD5 if found == Format.ODMAP else Format.ODMAP
 
     opts = _options(**options)
@@ -317,6 +321,26 @@ def convert(src: str, dst: str, to: Union[int, str, None] = None, **options) -> 
     rc = lib.dg_convert(
         str(src).encode(), str(dst).encode(), Format.parse(to), ctypes.byref(opts),
         ctypes.byref(handle),
+    )
+    report = _take_report(handle)
+    if rc != 0:
+        raise DragomanError(lib.dg_last_error().decode(), report)
+    return report
+
+
+def convert_unciv(src: str, dst: str, columns: int = 0, rows: int = 0, **options) -> Report:
+    """Translate a map to Unciv's format, choosing the hex grid.
+
+    Unciv's own sizes run from 24x15 (Tiny) to 80x50 (Huge). Zero for either
+    takes the library's default of 80x50, so convert_unciv(src, dst) is
+    convert(src, dst, 'unciv'). Both are clamped to 4..200.
+    """
+    lib = _library()
+    opts = _options(**options)
+    handle = ctypes.c_void_p()
+    rc = lib.dg_convert_unciv(
+        str(src).encode(), str(dst).encode(), int(columns), int(rows),
+        ctypes.byref(opts), ctypes.byref(handle),
     )
     report = _take_report(handle)
     if rc != 0:
