@@ -5,7 +5,7 @@ license = "MIT"
 repository = "https://github.com/Pr1nted/dragoman"
 edition = "2021"
 # Kept in step with VERSION by tools/check_version.py.
-version = "0.5.0"
+version = "0.5.1"
 
 [lib]
 name = "dragoman"

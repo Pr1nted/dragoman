@@ -1,6 +1,6 @@
 {
   "name": "open-dragoman",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Open Doctrines <-> Greater Diplomacy 5 map translation",
   "main": "index.js",
   "scripts": {

@@ -65,6 +65,25 @@ def main():
     if found.group(1) != version:
         fail(f"pyproject.toml says {found.group(1)!r}, but VERSION says {version!r}")
 
+    # The bindings added in 0.5.0 each carry the version in their own manifest,
+    # and none of them was checked here -- so a bump could land in VERSION, the
+    # header, pyproject and the Python package and leave Rust, npm and Zig
+    # claiming the release before it. They are checked by the same rule as the
+    # rest: whatever VERSION says.
+    for path, pattern, what in (
+        ("bindings/rust/Cargo.toml", r'^version = "([^"]+)"', "the Rust crate"),
+        ("bindings/js/package.json", r'"version"\s*:\s*"([^"]+)"', "the npm package"),
+        ("bindings/zig/build.zig.zon", r'\.version\s*=\s*"([^"]+)"', "the Zig package"),
+        ("bindings/rust/Cargo.lock",
+         r'name = "open-dragoman"\nversion = "([^"]+)"', "the Rust lockfile"),
+    ):
+        text = (ROOT / path).read_text()
+        found = re.search(pattern, text, re.M)
+        if not found:
+            fail(f"{path} has no version")
+        if found.group(1) != version:
+            fail(f"{what} says {found.group(1)!r}, but VERSION says {version!r}")
+
     # The ABI version is deliberately not checked against the release version:
     # they move for different reasons and are supposed to disagree. It only has
     # to exist and be a positive integer.
