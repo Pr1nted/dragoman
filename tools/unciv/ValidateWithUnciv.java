@@ -36,6 +36,11 @@ public class ValidateWithUnciv {
         Gdx.files = new HeadlessFiles();
         RulesetCache.INSTANCE.loadRulesets(true, true);
 
+        /* GameStarter reaches GUI.clearUndoCheckpoints, which wants the game
+         * singleton. Console mode is the game's own headless flag. */
+        com.unciv.UncivGame.Current = new com.unciv.UncivGame(true);
+        com.unciv.UncivGame.Current.settings = new com.unciv.models.metadata.GameSettings();
+
         Ruleset ruleset = null;
         for (String key : RulesetCache.INSTANCE.keySet()) {
             Ruleset r = RulesetCache.INSTANCE.get(key);
@@ -62,6 +67,19 @@ public class ValidateWithUnciv {
                 map.setTransients(ruleset, true);
                 System.out.println("  setTransients   ok");
 
+                /* AND AGAIN. The first call builds the tileMatrix; every call
+                 * after it asserts that matrix is the right size, which is only
+                 * true when the hex columns are centred on the origin:
+                 *     check(tileMatrix.size in (-2 * leftX)..(3 - 2 * leftX))
+                 * A map editor loads a map with ONE call, so a grid numbered
+                 * 0..width-1 looks perfectly valid here -- and GameStarter,
+                 * which calls it a second time through GameInfo.setTransients,
+                 * throws "called on existing tileMatrix of different size".
+                 * Every map this project wrote before 2026-10-01 was in that
+                 * state: loadable, unplayable, and passing this file. */
+                map.setTransients(ruleset, true);
+                System.out.println("  setTransients   ok twice (the game does)");
+
                 int unknown = 0;
                 for (Object o : map.getValues()) {
                     com.unciv.logic.map.tile.Tile t = (com.unciv.logic.map.tile.Tile) o;
@@ -81,15 +99,43 @@ public class ValidateWithUnciv {
                 if (unknown > 0) {
                     System.out.println("  FAILED          " + unknown + " unknown terrain(s)");
                     failed++;
-                } else {
-                    System.out.println("  terrains        all known to the ruleset");
+                    continue;
                 }
+                System.out.println("  terrains        all known to the ruleset");
+
+                /* And finally PLAY it, which is the question a map is for.
+                 * Loading proves less than it looks: GameStarter runs
+                 * setTransients again, assigns starting positions -- these maps
+                 * declare none, and Unciv picks them itself -- and places each
+                 * civ's opening units. A map can pass every check above and
+                 * fail here. */
+                com.unciv.models.metadata.GameSetupInfo info =
+                    new com.unciv.models.metadata.GameSetupInfo();
+                info.getMapParameters().setType(com.unciv.logic.map.MapGeneratedMainType.custom);
+                info.getMapParameters().setName(new java.io.File(path).getName());
+                info.setMapFile(new com.badlogic.gdx.files.FileHandle(new java.io.File(path)));
+                com.unciv.logic.GameInfo game =
+                    com.unciv.logic.GameStarter.Companion.startNewGame(info);
+                int placed = 0;
+                for (Object o : game.getCivilizations()) {
+                    com.unciv.logic.civilization.Civilization c =
+                        (com.unciv.logic.civilization.Civilization) o;
+                    if (c.getUnits().getCivUnits().iterator().hasNext()) placed++;
+                }
+                if (placed == 0) {
+                    System.out.println("  FAILED          game started but no civ got units");
+                    failed++;
+                    continue;
+                }
+                System.out.println("  startNewGame    ok, " + placed + " civ(s) placed"
+                                   + " (map declares " + map.getStartingLocations().size()
+                                   + " starting locations)");
             } catch (Exception e) {
                 System.out.println("  FAILED          " + e);
                 failed++;
             }
         }
-        System.out.println(failed == 0 ? "all maps are loadable by Unciv"
+        System.out.println(failed == 0 ? "all maps load AND start a game in Unciv"
                                        : failed + " map(s) failed");
         System.exit(failed == 0 ? 0 : 1);
     }

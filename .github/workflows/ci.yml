@@ -145,8 +145,18 @@ jobs:
           # exist in ruleset!", which reads exactly like a broken map.
           unzip -oq Unciv.jar 'jsons/*' -d .
 
-          javac -cp Unciv.jar -d unciv-out tools/unciv/ValidateWithUnciv.java
+          javac -cp Unciv.jar -d unciv-out tools/unciv/ValidateWithUnciv.java \
+                                            tools/unciv/CompareGrid.java
+          # Loads each map, runs setTransients TWICE (the game does, and only
+          # the second call checks the grid is centred on the origin), and then
+          # starts an actual game on it.
           java -cp unciv-out:Unciv.jar ValidateWithUnciv build/test-scratch/unciv-*.json
+
+          # And the grid itself, against the coordinates Unciv's own rectangular
+          # TileMap constructor produces -- tile for tile, not re-derived.
+          for m in build/test-scratch/unciv-grid.json build/test-scratch/unciv-centred.json; do
+            [ -f "$m" ] && java -cp unciv-out:Unciv.jar CompareGrid "$m"
+          done
 
   # Every binding, against a library built here.
   #

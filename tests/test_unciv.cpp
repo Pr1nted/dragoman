@@ -9,6 +9,7 @@
  */
 #include <dragoman/dragoman.h>
 
+#include <climits>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -61,14 +62,18 @@ static void testTheGridIsUncivsGrid() {
     CHECK(rows > 0);
     CHECK_EQ(static_cast<int>(tiles.size()), columns * rows);
 
+    /* Centred on the origin, exactly as TileMap(width, height, ruleset, wrap)
+     * lays a rectangular map out: columns -w/2..(w-1)/2, rows likewise. */
+    const int colMin = -(columns / 2), rowMin = -(rows / 2);
+
     long wrong = 0;
     std::set<std::pair<int, int>> seen;
-    for (int row = 0; row < rows; ++row) {
-        for (int col = 0; col < columns; ++col) {
-            const size_t i = static_cast<size_t>(row) * columns + col;
+    for (int ri = 0; ri < rows; ++ri) {
+        for (int ci = 0; ci < columns; ++ci) {
+            const size_t i = static_cast<size_t>(ri) * columns + ci;
             if (i >= tiles.size()) break;
             int wantX = 0, wantY = 0;
-            uncivHex(col, row, wantX, wantY);
+            uncivHex(ci + colMin, ri + rowMin, wantX, wantY);
             const int gotX = tiles[i]["position"].value("x", 0);
             const int gotY = tiles[i]["position"].value("y", 0);
             if (gotX != wantX || gotY != wantY) ++wrong;
@@ -79,6 +84,54 @@ static void testTheGridIsUncivsGrid() {
     /* Injective as well as correct: a function can agree with nothing and
      * still never collide, which is how the wrong one looked fine. */
     CHECK_EQ(seen.size(), tiles.size());
+}
+
+/* THE CHECK THAT ONLY THE SECOND CALL MAKES.
+ *
+ * TileMap.setTransients builds its tileMatrix on the first call and, on every
+ * call after that, asserts the matrix it already has is the right size:
+ *
+ *     check(tileMatrix.size in (-2 * leftX)..(3 - 2 * leftX))
+ *         { "TileMap.setTransients called on existing tileMatrix of different size" }
+ *
+ * which is only satisfiable when the columns are centred on the origin, so that
+ * rightX is -leftX give or take one. A map editor loads a map with ONE call and
+ * is perfectly happy with a grid numbered 0..width-1; GameStarter calls it a
+ * second time through GameInfo.setTransients, and there the same map throws.
+ *
+ * Every map this library wrote before 2026-10-01 was numbered from zero. It
+ * loaded in the editor, passed tools/validate_unciv.py, and passed
+ * ValidateWithUnciv -- which called setTransients once -- and could not start a
+ * game. The invariant is asserted here because it is cheap and runs everywhere;
+ * the Java validator now starts an actual game, which is the real question. */
+static void testTheGridIsCentredOnTheOrigin() {
+    World w = fixture::makeWorld();
+    Options opt;
+    Report report;
+    const std::string out = fixture::scratch("unciv-centred.json");
+    REQUIRE(writeUncivMap(out, w, opt, report));
+
+    const Json map = readJsonFile(out);
+    REQUIRE(map.contains("tileList"));
+    const Json& tiles = map["tileList"];
+    REQUIRE(tiles.is_array() && !tiles.empty());
+
+    int leftX = INT_MAX, rightX = INT_MIN;
+    for (size_t i = 0; i < tiles.size(); ++i) {
+        const int x = tiles[i]["position"].value("x", 0);
+        if (x < leftX) leftX = x;
+        if (x > rightX) rightX = x;
+    }
+    const int width = rightX - leftX + 1;
+    CHECK(width >= -2 * leftX);
+    CHECK(width <= 3 - 2 * leftX);
+
+    /* World wrap needs an even width and the writer always wraps. Note that
+     * mapSize.width is the COLUMN COUNT and is not the x extent above -- axial
+     * x runs wider than the grid is columns, and Unciv's own TileMap(w, h, ...)
+     * has the same property. tools/unciv/CompareGrid.java checks this writer's
+     * positions against that constructor's, tile for tile. */
+    CHECK_EQ(map["mapParameters"]["mapSize"].value("width", 0) % 2, 0);
 }
 
 /* Only terrains Unciv has, and Hill is not one of them -- it is a FEATURE, and
@@ -257,6 +310,7 @@ static void testAWrittenMapIsDetectedAsUnciv() {
 
 int main() {
     testTheGridIsUncivsGrid();
+    testTheGridIsCentredOnTheOrigin();
     testOnlyUncivsOwnTerrainsAreWritten();
     testInventedClimateIsDeclared();
     testTheOriginalComesBackThroughTheFile();

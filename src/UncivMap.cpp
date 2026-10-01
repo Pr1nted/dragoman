@@ -183,8 +183,25 @@ bool writeUncivMap(const std::string& path, const World& world, const Options& o
      *
      * Clamped rather than refused: below four hexes there is no world to speak
      * of, and above two hundred no build of the game will open it. */
-    const int columns = std::max(4, std::min(columns_in > 0 ? columns_in : 80, 200));
+    int columns = std::max(4, std::min(columns_in > 0 ? columns_in : 80, 200));
     const int rows = std::max(4, std::min(rows_in > 0 ? rows_in : 50, 200));
+
+    /* World wrap needs an even width, and the map this writes always wraps --
+     * it is a globe. Unciv's own rectangular constructor rounds an odd width
+     * down for the same reason, so an odd --columns loses its last column here
+     * rather than producing a map the game will not wrap. */
+    if (columns % 2 != 0) --columns;
+
+    /* The hex coordinates must be CENTRED ON THE ORIGIN, not run from zero.
+     * TileMap.setTransients asserts it -- `tileMatrix.size in -2*leftX .. 3-2*leftX`
+     * -- but only on the SECOND call, when the tileMatrix already exists. A map
+     * editor loads a map with one call and is happy; GameStarter calls it again
+     * through GameInfo.setTransients, and a map written 0..width-1 dies there
+     * with "called on existing tileMatrix of different size". So the map looked
+     * valid to every check this project had and could not start a game.
+     * These are the exact ranges of TileMap(width, height, ruleset, worldWrap). */
+    const int colMin = -(columns / 2), colMax = (columns - 1) / 2;
+    const int rowMin = -(rows / 2),    rowMax = (rows - 1) / 2;
 
     std::map<int64_t, const Province*> byId;
     for (const auto& p : world.provinces) byId[p.id] = &p;
@@ -192,11 +209,13 @@ bool writeUncivMap(const std::string& path, const World& world, const Options& o
     Json tiles = Json::array();
     long water = 0, land = 0, invented = 0;
 
-    for (int row = 0; row < rows; ++row) {
-        for (int col = 0; col < columns; ++col) {
-            /* The centre of this hex, in raster pixels. */
-            const int px = static_cast<int>((col + 0.5) * world.width / columns);
-            const int py = static_cast<int>((row + 0.5) * world.height / rows);
+    for (int row = rowMin; row <= rowMax; ++row) {
+        for (int col = colMin; col <= colMax; ++col) {
+            /* The centre of this hex, in raster pixels. The grid index is the
+             * offset from the corner, which is no longer the coordinate. */
+            const int ci = col - colMin, ri = row - rowMin;
+            const int px = static_cast<int>((ci + 0.5) * world.width / columns);
+            const int py = static_cast<int>((ri + 0.5) * world.height / rows);
             const size_t idx = static_cast<size_t>(py) * world.width + px;
             const uint32_t id = idx < world.raster.size() ? world.raster[idx] : 0;
 
