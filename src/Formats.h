@@ -63,6 +63,19 @@ bool writeGd5Map(const std::string& path, const World& world, const Options& opt
 /* Unciv. A resampling rather than a field mapping -- see UncivMap.cpp. */
 bool readUncivMap(const std::string& path, const Options& opt, World& world, Report& report);
 bool writeUncivMap(const std::string& path, const World& world, const Options& opt,
+                   Report& report, int columns = 0, int rows = 0,
+                   const std::string& modName = std::string());
+
+/* An Unciv EXTENSION MOD, as a directory:
+ *
+ *   <out>/jsons/Nations.json    every nation this map has, as a civilization
+ *   <out>/maps/<name>.json      the map, declaring the mod it needs
+ *
+ * Why a mod at all: Unciv's civilizations come from the ruleset, not the map,
+ * so without one a nation can only reach Unciv by being matched to one of the
+ * two dozen Civ V ships. With one, every nation crosses under its own name
+ * and colour, and every nation can hold a starting location. */
+bool writeUncivMod(const std::string& dir, const World& world, const Options& opt,
                    Report& report, int columns = 0, int rows = 0);
 
 /* Which game a path holds, decided by content. */

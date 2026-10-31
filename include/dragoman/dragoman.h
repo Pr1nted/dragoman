@@ -76,7 +76,17 @@ typedef enum dg_format {
      * place. Crossing is a RESAMPLING, so a map that goes out and comes back is
      * the map the sidecar carried, not one rebuilt from hexes -- and writing
      * one invents terrain a province map never had. See docs/unciv.md. */
-    DG_FORMAT_UNCIV   = 3
+    DG_FORMAT_UNCIV   = 3,
+
+    /* Unciv again, but as an EXTENSION MOD: a directory holding
+     * jsons/Nations.json and maps/<name>.json.
+     *
+     * Unciv takes its civilizations from the ruleset, never from the map, so
+     * DG_FORMAT_UNCIV can only seat a nation that happens to match one of the
+     * two dozen Civ V ships. A mod carries the map's own nations -- name,
+     * colour, leader, and its provinces as city names -- so all of them cross
+     * and all of them can hold a starting location. */
+    DG_FORMAT_UNCIV_MOD = 4
 } dg_format;
 
 /* Which of the two a path holds, by looking at it rather than at its name --

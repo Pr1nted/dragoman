@@ -34,7 +34,14 @@ public class ValidateWithUnciv {
         }
 
         Gdx.files = new HeadlessFiles();
-        RulesetCache.INSTANCE.loadRulesets(true, true);
+        // noMods=true by default: a plain map must not be judged against
+        // whatever mods happen to be sitting in ./mods. Pass --mods to load
+        // them, which is what a map that DECLARES a mod needs -- its nations
+        // live there and the map is meaningless without them.
+        boolean withMods = false;
+        for (String a : args) if ("--mods".equals(a)) withMods = true;
+        RulesetCache.INSTANCE.loadRulesets(true, !withMods);
+        if (withMods) System.out.println("mods: loaded from ./mods");
 
         /* GameStarter reaches GUI.clearUndoCheckpoints, which wants the game
          * singleton. Console mode is the game's own headless flag. */
@@ -57,6 +64,7 @@ public class ValidateWithUnciv {
 
         int failed = 0;
         for (String path : args) {
+            if (path.startsWith("--")) continue;
             System.out.println("=== " + path + " ===");
             try {
                 String text = new String(Files.readAllBytes(Paths.get(path)), "UTF-8");
@@ -102,6 +110,52 @@ public class ValidateWithUnciv {
                     continue;
                 }
                 System.out.println("  terrains        all known to the ruleset");
+
+                // Terrains were the only thing checked here, and loading does
+                // NOT catch the rest: a tile carrying a resource named
+                // "Unobtanium" loads, survives setTransients twice and starts
+                // a game. So a map that writes resources or improvements has
+                // to have them checked against the ruleset explicitly, or
+                // "it loads" says nothing about them.
+                int badResources = 0, badImprovements = 0, placedWrong = 0;
+                for (Object o : map.getValues()) {
+                    com.unciv.logic.map.tile.Tile t = (com.unciv.logic.map.tile.Tile) o;
+                    String res = t.getResource();
+                    if (res != null && !res.isEmpty()) {
+                        com.unciv.models.ruleset.tile.TileResource tr =
+                            ruleset.getTileResources().get(res);
+                        if (tr == null) {
+                            if (badResources++ < 3) System.out.println("  UNKNOWN resource: " + res);
+                        } else {
+                            // terrainsCanBeFoundOn, matched against the base and
+                            // the features -- a jungle hex is Plains underneath.
+                            java.util.List<String> ok = tr.getTerrainsCanBeFoundOn();
+                            boolean fits = ok.contains(String.valueOf(
+                                t.getClass().getMethod("getBaseTerrain").invoke(t)));
+                            if (!fits) {
+                                for (String f : t.getTerrainFeatures()) {
+                                    if (ok.contains(f)) { fits = true; break; }
+                                }
+                            }
+                            if (!fits && placedWrong++ < 3) {
+                                System.out.println("  RESOURCE ON WRONG TERRAIN: " + res);
+                            }
+                        }
+                    }
+                    String imp = t.getImprovement();
+                    if (imp != null && !imp.isEmpty()
+                        && ruleset.getTileImprovements().get(imp) == null) {
+                        if (badImprovements++ < 3) System.out.println("  UNKNOWN improvement: " + imp);
+                    }
+                }
+                if (badResources > 0 || badImprovements > 0 || placedWrong > 0) {
+                    System.out.println("  FAILED          " + badResources + " unknown resource(s), "
+                                       + placedWrong + " on terrain the ruleset forbids, "
+                                       + badImprovements + " unknown improvement(s)");
+                    failed++;
+                    continue;
+                }
+                System.out.println("  resources       all known, and on terrain that allows them");
 
                 /* And finally PLAY it, which is the question a map is for.
                  * Loading proves less than it looks: GameStarter runs

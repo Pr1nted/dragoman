@@ -256,6 +256,13 @@ jobs:
       - name: Compare every copy of the version
         run: python3 tools/check_version.py
 
+      # The formats are declared six times and nothing connected them. When
+      # Unciv was added the header gained it and none of the five bindings
+      # did; JavaScript went further and refused the value as not a format.
+      # Neither is a compile error anywhere.
+      - name: Every binding names every format
+        run: python3 tools/check_binding_formats.py
+
   # The strongest test there is, and the one CI cannot run on its own: the
   # maps the two games actually ship. Neither project's maps are ours to
   # redistribute, so this job only does anything when a fork provides them.

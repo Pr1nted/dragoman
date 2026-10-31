@@ -7,9 +7,16 @@ function per pair of fields, and would double again the day a third game
 appeared. The model is instead the union of what the two describe, and each
 format owns exactly one reader and one writer against it.
 
-The rule for a field: it lives in the model if both games have a concept for it,
-even under different names. If only one does, it rides in `extra` and, on the
-way out, in the sidecar.
+The rule for a field: it lives in the model if **more than one** game has a
+concept for it, even under different names. If only one does, it rides in
+`extra` and, on the way out, in the sidecar.
+
+That rule was written for two games and said "both". Unciv is the third, and it
+does not change the arithmetic -- a field two of the three share still earns its
+place -- but it does mean a concept can now be in the model and still have
+nowhere to go in one target. Unciv has no province, so an id, a name, a core or
+a claim has no field there however well the other two agree on it. See
+mapping.md, whose table now has a column per game for exactly this reason.
 
 This is the schema `dg_world_to_json` emits and `dg_world_from_json` accepts.
 It is versioned with the ABI: fields may be added, and existing ones do not

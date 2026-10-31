@@ -21,6 +21,52 @@ so the game names the Dragoman it was built and tested against.
 0.5.1 and 0.5.2 (the same day) also brought the Unciv grid centred on the
 origin, and every binding able to name Unciv.
 
+### Added
+
+- **`DG_FORMAT_UNCIV_MOD` (4): Unciv as an extension mod.**
+  `--to unciv-mod` writes a directory holding `jsons/Nations.json` and
+  `maps/<name>.json`. Unciv reads civilizations from the ruleset, never from
+  the map, so a plain Unciv map can only seat a nation that matches one of the
+  two dozen Civ V ships -- twelve of a hundred and twelve on the Modern Day
+  map. A mod carries every nation under its own name and colour, with its
+  provinces as city names, and every one of them can hold a starting location:
+  112 instead of 21. Verified against the released Unciv 4.22.9. All five
+  bindings name the new value.
+
+  The mod's identity is **its folder name** -- Unciv does
+  `modRuleset.name = modFolder.name()` -- so the map declares the directory it
+  was written into. A mod whose map declares anything else loads against plain
+  vanilla with every starting location naming a civilization that does not
+  exist.
+
+- **Forts, deposits and starting locations reach Unciv's hexes.** A fortified
+  province carries `improvement: Fort`; gold, gemstones, metal and oil carry
+  `resource` (with `resourceAmount` for the two strategic ones). Both are
+  refused where the ruleset would not accept them -- `Fort` is not allowed on
+  mountain, marsh or water, and `terrainsCanBeFoundOn` keeps Gems to jungle,
+  forest and hill. **Rubber is not substituted**: Civ V vanilla has none, and
+  borrowing Dyes would mean a map that came back had rubber where it had none.
+
+- **A fort or deposit added in Unciv's editor comes home.** One cleared there
+  does not: a province spans several hexes, so clearing one says a hex changed,
+  not that the province is unfortified. The asymmetry is reported.
+
+### Changed
+
+- **Nine invented civilization mappings removed.** Italy stood in for Rome,
+  Iraq for Babylon, Mexico for the Aztecs and six more. Those were this
+  library deciding something about the world rather than translating it, and
+  the mod format removed the only argument for keeping them. Only exact
+  matches remain -- a modern state and the civilization named after it. A
+  world map now seats twelve nations on the plain Unciv path instead of
+  twenty-one, and a hundred and twelve with a mod.
+
+- **`ValidateWithUnciv` checks resources and improvements**, not just
+  terrains, and takes `--mods` to load a declared mod. Loading proved nothing
+  about either before: a tile carrying a resource named `Unobtanium` loaded,
+  survived `setTransients` twice and started a game.
+
+
 ### Fixed
 
 - **A Greater Diplomacy fort grew every time its map crossed.** GD5 has twenty

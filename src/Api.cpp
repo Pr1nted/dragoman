@@ -74,6 +74,7 @@ bool saveFrom(const World& world, const std::string& path, dg_format fmt, const 
     if (fmt == DG_FORMAT_ODMAP) return writeOdMap(path, world, opt, report);
     if (fmt == DG_FORMAT_GD5) return writeGd5Map(path, world, opt, report);
     if (fmt == DG_FORMAT_UNCIV) return writeUncivMap(path, world, opt, report);
+    if (fmt == DG_FORMAT_UNCIV_MOD) return writeUncivMod(path, world, opt, report);
     setLastError("no such output format");
     return false;
 }
@@ -193,6 +194,7 @@ const char* dg_format_name(dg_format fmt) {
         case DG_FORMAT_ODMAP: return "odmap";
         case DG_FORMAT_GD5: return "gd5";
         case DG_FORMAT_UNCIV: return "unciv";
+        case DG_FORMAT_UNCIV_MOD: return "unciv-mod";
         default: return "unknown";
     }
 }

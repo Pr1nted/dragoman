@@ -47,24 +47,64 @@ Python prints for the colour tuple, `"(1, 0, 0)"`, spaces included.
 
 ## Provinces
 
-| Concept | Open Doctrines | GD5 | How |
-|---|---|---|---|
-| id | `provinces.json` key | `map_data.json` `id` | mapped |
-| name | `provinces.json` `name` | `name` | mapped |
-| owner | `iso_a3` → `countries.json` | `owner`, a nation_data key | mapped |
-| cores | — | `cores` | carried |
-| claims | `claims.json` (per nation) | `claims` (per nation) | mapped |
-| population | `population.json` | — | carried |
-| industry | `resources.json` `industry.level` | `buildings` (factories counted) | mapped, approximately |
-| fortification | `resources.json` | `buildings` (`Fort Lvl N`) | mapped, scaled 1:4, original kept when unchanged |
-| port | `ports.json` | — | carried |
-| resources | five fixed deposits, each a surface and reserve figure | free-form named quantities | carried |
-| garrison | `armies.json` — a headcount | `units` — typed divisions | mapped, approximately |
-| terrain | — (land/sea raster only) | `terrain`, 13-colour palette | derived + carried |
-| land/sea mask | `land_sea.png` | — (implied by sea provinces) | **carried**, see below |
-| neighbours | — (derived at load) | `neighbors` | **derived** |
-| centre | — (derived at load) | `center` | **derived** |
-| coastal | — | `is_coastal` | derived |
+| Concept | Open Doctrines | GD5 | Unciv | How |
+|---|---|---|---|---|
+| id | `provinces.json` key | `map_data.json` `id` | — | mapped; Unciv has no province |
+| name | `provinces.json` `name` | `name` | — | mapped; sidecar only for Unciv |
+| owner | `iso_a3` → `countries.json` | `owner`, a nation_data key | `startingLocations` (civs only) | mapped; see below |
+| cores | — | `cores` | — | carried |
+| claims | `claims.json` (per nation) | `claims` (per nation) | — | mapped |
+| population | `population.json` | — | seats the starting location | carried |
+| industry | `resources.json` `industry.level` | `buildings` (factories counted) | — | mapped, approximately |
+| fortification | `resources.json` | `buildings` (`Fort Lvl N`) | `improvement: Fort` | mapped; Unciv has one fort, not a ladder |
+| port | `ports.json` | — | — | carried |
+| resources | five fixed deposits | free-form named quantities | `resource` + `resourceAmount` | carried; four of five reach Unciv |
+| garrison | `armies.json` — a headcount | `units` — typed divisions | — | mapped, approximately |
+| terrain | — (land/sea raster only) | `terrain`, 13-colour palette | `baseTerrain` + `terrainFeatures` | derived + carried |
+| land/sea mask | `land_sea.png` | — (implied by sea provinces) | implied by the terrain | **carried**, see below |
+| neighbours | — (derived at load) | `neighbors` | implied by the grid | **derived** |
+| centre | — (derived at load) | `center` | the hex itself | **derived** |
+| coastal | — | `is_coastal` | implied by the terrain | derived |
+
+### Unciv has no province, and that is most of the table
+
+Unciv's map is a hex grid with a terrain on each hex. There is no province
+object, so sixteen of the rows above have nothing to map onto and say so: an
+id, a name, a core, a claim, a port and a garrison are carried in the sidecar
+and nowhere else. What a hex can hold is its terrain, one resource, one
+improvement, and -- on the map rather than the hex -- a starting location.
+
+Three of those now carry something:
+
+- **A fort** becomes Unciv's `Fort` improvement. Unciv has one fort where Open
+  Doctrines has five levels and GD5 counts buildings, so the level stays in the
+  sidecar. `Fort` has a `terrainsCanBeBuiltOn` list that excludes mountain,
+  marsh and all water, and a fortified province that lands on one of those
+  crosses without its fort rather than with an improvement the ruleset refuses.
+- **A deposit** becomes a `resource`. Four of Open Doctrines' five have a
+  vanilla counterpart -- gold, gemstones, metal and oil as Gold Ore, Gems, Iron
+  and Oil. **Rubber has none**, and is not substituted: Civ V put rubber in a
+  later ruleset, and borrowing Dyes for it would mean a map coming back had
+  rubber where it had none. `terrainsCanBeFoundOn` is tight -- Gems only on
+  jungle, forest or hill -- so a deposit on the wrong hex is dropped. On a
+  world map that is most of them: 625 placed against 802 refused.
+- **An owner** becomes a `startingLocation`. On the plain Unciv path that is
+  only the nations whose ISO code matches a civilization Civ V ships --
+  twelve, on a world map, and no stand-ins are invented for the rest. Writing
+  an extension mod instead (`--to unciv-mod`) carries every nation as its own
+  civilization, and then all 112 of them are seated on their most populous
+  hex.
+  Neither game records a capital, so population is the only thing in the model
+  that says where a country lives. A world map seats about twenty nations and
+  leaves the rest for Unciv to place, which is what it did for every map this
+  library wrote before.
+
+None of this changes a round trip. The sidecar carries the exact figures either
+way, so a map that goes out to Unciv and comes back is the map that set out --
+unless somebody edited it there, in which case a fort or a deposit **added** on
+a hex is taken over the carried original, and one cleared is reported rather
+than taken. See "Edits made in Unciv" in unciv.md for why those two directions
+are not treated alike.
 
 ### Claims are not cores
 
@@ -193,6 +233,12 @@ is reported as `od.land_sea`.
 | policies | `starting_policies.json` | `domestic_policies` | carried, both ways — see below |
 | research | — (compiled into the game) | `research` per nation | **derived from the date**, see below |
 | faction, manpower, fuel | — | `faction`, `manpower`, `fuel` | carried |
+
+Unciv is not a column here because it has no nation object a map can carry.
+Its civilizations come from the ruleset, not from the file, so a nation reaches
+an Unciv map only as a `startingLocation` naming one of the two dozen civs Civ V
+ships -- and everything else about it (treasury, flag, relations, policies,
+research) rides in the sidecar. See "Unciv has no province" above.
 
 ### Treasury and materials are not the same number
 
@@ -327,6 +373,10 @@ gated on does cross, so a country at least arrives facing the right menu.
 | date | `"July 1914 AD"`, month resolution | `{day, month, year}`, month 0-based | mapped (day and turn carried) |
 | scenario settings | — | `scenario_settings` | carried |
 | history log | — | `history.json` | carried |
+
+Unciv takes the name into `mapParameters.name`. Its `description` is not free
+for a description: it is the only free-text field Unciv round-trips, and the
+sidecar record lives there. A date has nowhere to go at all.
 
 ## Layers written
 

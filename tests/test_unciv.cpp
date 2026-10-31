@@ -308,6 +308,351 @@ static void testAWrittenMapIsDetectedAsUnciv() {
     CHECK_EQ(detectFormat(out), 3);
 }
 
+/* A fort crosses as Unciv's Fort improvement -- but only where Unciv will
+ * build one. TileImprovements.json lists terrainsCanBeBuiltOn for Fort and
+ * Mountain and Marsh are not on it, so a fortified province that lands on
+ * either has to cross without its fort. Writing one there produces a map the
+ * ruleset refuses, which is worse than a missing fort.
+ *
+ * The negative half is the point. A version of this that only checked "a fort
+ * appears somewhere" passes just as well against a writer that puts Fort on
+ * every fortified hex regardless of terrain. */
+static void testAFortCrossesOnlyWhereUncivWillBuildOne() {
+    World w = fixture::makeWorld();
+
+    const auto terrainAndFort = [&w](int64_t id, const char* terrain, int fort) {
+        Province* p = w.findProvince(id);
+        REQUIRE(p != nullptr);
+        p->terrain = terrain;
+        p->fortification = fort;
+    };
+    terrainAndFort(2, "plains", 2);     /* allowed      */
+    terrainAndFort(3, "mountain", 3);   /* refused      */
+    terrainAndFort(4, "swamp", 3);      /* refused      */
+    terrainAndFort(5, "plains", 0);     /* not fortified */
+    terrainAndFort(6, "plains", 0);
+
+    Options opt;
+    Report report;
+    const std::string out = fixture::scratch("unciv-forts.json");
+    REQUIRE(writeUncivMap(out, w, opt, report));
+
+    const Json map = readJsonFile(out);
+    REQUIRE(map.contains("tileList"));
+
+    int forts = 0, fortsOnMountain = 0, fortsOnMarsh = 0, improvementsThatAreNotForts = 0;
+    for (const auto& t : map["tileList"]) {
+        const std::string imp = t.value("improvement", std::string());
+        if (imp.empty()) continue;
+        if (imp != "Fort") { ++improvementsThatAreNotForts; continue; }
+        ++forts;
+        if (t.value("baseTerrain", std::string()) == "Mountain") ++fortsOnMountain;
+        if (t.contains("terrainFeatures")) {
+            for (const auto& f : t["terrainFeatures"]) {
+                if (f.is_string() && f.get<std::string>() == "Marsh") ++fortsOnMarsh;
+            }
+        }
+    }
+
+    CHECK(forts > 0);                        /* the plain block carried its fort */
+    CHECK_EQ(fortsOnMountain, 0);
+    CHECK_EQ(fortsOnMarsh, 0);
+    CHECK_EQ(improvementsThatAreNotForts, 0);
+
+    /* And nothing invents one: with no fortification anywhere, no improvement
+     * is written at all. */
+    for (int64_t id = 1; id <= 6; ++id) {
+        if (Province* p = w.findProvince(id)) p->fortification = 0;
+    }
+    const std::string bare = fixture::scratch("unciv-no-forts.json");
+    REQUIRE(writeUncivMap(bare, w, opt, report));
+    const Json bareMap = readJsonFile(bare);
+    REQUIRE(bareMap.contains("tileList"));
+    int anyImprovement = 0;
+    for (const auto& t : bareMap["tileList"]) {
+        if (!t.value("improvement", std::string()).empty()) ++anyImprovement;
+    }
+    CHECK_EQ(anyImprovement, 0);
+}
+
+/* Deposits cross as Unciv resources, but only the four with a vanilla
+ * counterpart and only onto terrain TileResources.json allows them on.
+ *
+ * The negative halves carry the weight: rubber must never appear (Civ V
+ * vanilla has no rubber, and a stand-in would put rubber where the map had
+ * none), and a deposit on the wrong terrain must be dropped rather than
+ * written -- Unciv loads such a map perfectly happily, so nothing downstream
+ * would catch it. */
+static void testADepositCrossesOnlyWhereItsResourceMaySit() {
+    World w = fixture::makeWorld();
+
+    const auto setup = [&w](int64_t id, const char* terrain,
+                            const char* deposit, double surface) {
+        Province* p = w.findProvince(id);
+        REQUIRE(p != nullptr);
+        p->terrain = terrain;
+        p->resources.clear();
+        if (deposit != nullptr) {
+            Resource r;
+            r.a = surface;
+            r.b = 1.0;
+            p->resources[deposit] = r;
+        }
+    };
+    setup(2, "plains", "metal", 36.0);      /* Iron sits on Plains     */
+    setup(3, "plains", "gemstones", 50.0);  /* Gems do NOT sit on Plains */
+    setup(4, "jungle", "gemstones", 50.0);  /* Gems do sit on Jungle   */
+    setup(5, "plains", "rubber", 90.0);     /* no counterpart at all   */
+    setup(6, "plains", nullptr, 0.0);
+
+    Options opt;
+    Report report;
+    const std::string out = fixture::scratch("unciv-resources.json");
+    REQUIRE(writeUncivMap(out, w, opt, report));
+    const Json map = readJsonFile(out);
+    REQUIRE(map.contains("tileList"));
+
+    int iron = 0, gems = 0, gemsOnPlains = 0, rubberish = 0, ironAmountSeen = 0;
+    for (const auto& t : map["tileList"]) {
+        const std::string r = t.value("resource", std::string());
+        if (r.empty()) continue;
+        const std::string base = t.value("baseTerrain", std::string());
+        bool jungle = false;
+        if (t.contains("terrainFeatures")) {
+            for (const auto& f : t["terrainFeatures"]) {
+                if (f.is_string() && f.get<std::string>() == "Jungle") jungle = true;
+            }
+        }
+        if (r == "Iron") {
+            ++iron;
+            ironAmountSeen = t.value("resourceAmount", 0);
+        } else if (r == "Gems") {
+            ++gems;
+            if (!jungle) ++gemsOnPlains;
+        } else {
+            ++rubberish;  /* anything else at all, including a rubber stand-in */
+        }
+    }
+
+    CHECK(iron > 0);
+    CHECK(gems > 0);
+    CHECK_EQ(gemsOnPlains, 0);
+    CHECK_EQ(rubberish, 0);
+    /* sqrt(36) = 6, and a strategic deposit carries its amount. */
+    CHECK_EQ(ironAmountSeen, 6);
+}
+
+/* Starting locations, for the nations Unciv has a civilization for.
+ *
+ * The negative half matters as much as the positive: a nation Civ V does not
+ * ship must NOT appear, because StartingLocation.nation has to name a civ in
+ * the ruleset and an invented one would be read back as nothing. */
+static void testStartingLocationsNameOnlyCivsTheRulesetHas() {
+    World w = fixture::makeWorld();
+    /* 2 and 3 are ordinary land; give one a civ Unciv has and one it has not. */
+    REQUIRE(w.findProvince(2) != nullptr);
+    REQUIRE(w.findProvince(3) != nullptr);
+    /* Every owner set here, so the count below is this test's and not the
+     * fixture's -- makeWorld gives its provinces owners of their own. */
+    for (int64_t id = 1; id <= 6; ++id) {
+        if (Province* p = w.findProvince(id)) p->owner.clear();
+    }
+    w.findProvince(2)->owner = "FRA";   /* France, which Civ V ships   */
+    w.findProvince(3)->owner = "LUX";   /* Luxembourg, which it does not */
+
+    Options opt;
+    Report report;
+    const std::string out = fixture::scratch("unciv-starts.json");
+    REQUIRE(writeUncivMap(out, w, opt, report));
+    const Json map = readJsonFile(out);
+
+    REQUIRE(map.contains("startingLocations"));
+    bool sawFrance = false;
+    int total = 0;
+    for (const auto& sl : map["startingLocations"]) {
+        ++total;
+        const std::string nation = sl.value("nation", std::string());
+        /* Never a raw ISO code, and never Luxembourg under any spelling. */
+        CHECK(nation != "FRA");
+        CHECK(nation != "LUX");
+        CHECK(nation != "Luxembourg");
+        if (nation == "France") sawFrance = true;
+        CHECK(sl.contains("position"));
+    }
+    CHECK(sawFrance);
+    CHECK_EQ(total, 1);
+}
+
+/* A fort or a deposit added in Unciv's editor comes home; one cleared there
+ * does not, because a province spans several hexes and clearing one of them
+ * does not settle what the province is.
+ *
+ * Both halves are checked. Without the second, a reader that simply adopted
+ * whatever the last hex said would pass. */
+static void testAnAddedFortOrDepositComesHomeButARemovalDoesNot() {
+    World w = fixture::makeWorld();
+    for (auto& p : w.provinces) {
+        if (p.is_sea) continue;
+        p.terrain = "plains";
+        p.fortification = 0;
+        p.resources.clear();
+    }
+    /* One province starts fortified, so there is something to try to remove. */
+    REQUIRE(w.findProvince(2) != nullptr);
+    w.findProvince(2)->fortification = 3;
+
+    Options opt;
+    Report report;
+    const std::string out = fixture::scratch("unciv-edit-fort.json");
+    REQUIRE(writeUncivMap(out, w, opt, report));
+
+    std::vector<uint8_t> bytes;
+    REQUIRE(readFile(out, bytes));
+    Json map = Json::parse(bytes.begin(), bytes.end(), nullptr, false);
+    REQUIRE(!map.is_discarded());
+
+    /* The player clears every fort the writer placed, and puts Iron with an
+     * amount of 3 on a hex that had no deposit at all. */
+    long cleared = 0, placed = 0;
+    for (auto& t : map["tileList"]) {
+        if (t.value("improvement", std::string()) == "Fort") {
+            t.erase("improvement");
+            ++cleared;
+        } else if (t.value("baseTerrain", std::string()) == "Plains"
+                   && !t.contains("resource") && placed == 0) {
+            t["resource"] = "Iron";
+            t["resourceAmount"] = 3;
+            ++placed;
+        }
+    }
+    REQUIRE(cleared > 0);
+    REQUIRE(placed == 1);
+    REQUIRE(writeFile(out, map.dump()));
+
+    World back;
+    Report r2;
+    REQUIRE(readUncivMap(out, opt, back, r2));
+
+    /* The addition arrived: some province gained metal, 3*3 = 9 of it. */
+    bool gainedMetal = false;
+    for (const auto& p : back.provinces) {
+        const auto it = p.resources.find("metal");
+        if (it != p.resources.end()) {
+            gainedMetal = true;
+            CHECK_EQ(static_cast<int>(it->second.a + 0.5), 9);
+        }
+    }
+    CHECK(gainedMetal);
+
+    /* The removal did not: province 2 is still fortified. */
+    const Province* two = back.findProvince(2);
+    REQUIRE(two != nullptr);
+    CHECK_EQ(two->fortification, 3);
+}
+
+/* The same, on a map whose provinces have NO terrain -- which is every Open
+ * Doctrines map, since that format stores none and the hexes get a climate
+ * invented from latitude.
+ *
+ * This is its own test because the one above cannot see the bug it guards:
+ * the fixture sets terrain, so the invented-climate path never runs there. On
+ * a real Open Doctrines world map it ran for all 1,642 provinces, and an early
+ * version of the read-back skipped every one of them. */
+static void testAnAdditionComesHomeFromATerrainlessMapToo() {
+    World w = fixture::makeWorld();
+    for (auto& p : w.provinces) {
+        p.terrain.clear();          /* as an Open Doctrines map arrives */
+        p.fortification = 0;
+        p.resources.clear();
+    }
+
+    Options opt;
+    Report report;
+    const std::string out = fixture::scratch("unciv-edit-noterrain.json");
+    REQUIRE(writeUncivMap(out, w, opt, report));
+
+    std::vector<uint8_t> bytes;
+    REQUIRE(readFile(out, bytes));
+    Json map = Json::parse(bytes.begin(), bytes.end(), nullptr, false);
+    REQUIRE(!map.is_discarded());
+
+    /* Put a fort on the first hex that is not water, whatever climate it was
+     * given -- the point is that the province behind it has no terrain. */
+    long placed = 0;
+    for (auto& t : map["tileList"]) {
+        const std::string base = t.value("baseTerrain", std::string());
+        if (base == "Ocean" || base == "Coast" || base == "Lakes") continue;
+        if (base == "Mountain") continue;   /* a Fort may not stand there */
+        t["improvement"] = "Fort";
+        ++placed;
+        if (placed == 2) break;
+    }
+    REQUIRE(placed > 0);
+    REQUIRE(writeFile(out, map.dump()));
+
+    World back;
+    Report r2;
+    REQUIRE(readUncivMap(out, opt, back, r2));
+
+    long fortified = 0;
+    for (const auto& p : back.provinces) {
+        if (p.fortification > 0) ++fortified;
+    }
+    CHECK(fortified > 0);
+}
+
+/* The mod carries the map's own nations, and the map declares the mod.
+ *
+ * The declaration is the half that is easy to get wrong and impossible to
+ * notice: Unciv names a mod after ITS FOLDER (RulesetCache does
+ * `modRuleset.name = modFolder.name()`), so a map that declares anything else
+ * -- the world's title, say -- loads against plain vanilla, and every
+ * starting location in it names a civilization that does not exist. */
+static void testTheModCarriesTheNationsAndTheMapDeclaresIt() {
+    World w = fixture::makeWorld();
+    const std::string dir = fixture::scratch("TestMod");
+    /* The scratch directory outlives a run. Without this, a map left by an
+     * EARLIER, correct run is still sitting at maps/TestMod.json, and the
+     * check below reads that instead of what this run just wrote -- which is
+     * how a deliberately broken build passed this test once already. */
+    std::filesystem::remove_all(dir);
+
+    Options opt;
+    Report report;
+    REQUIRE(writeUncivMod(dir, w, opt, report));
+
+    const Json nations = readJsonFile(dir + "/jsons/Nations.json");
+    REQUIRE(nations.is_array());
+    CHECK(!nations.empty());
+    for (const auto& n : nations) {
+        CHECK(n.contains("name"));
+        CHECK(n.contains("outerColor"));
+        CHECK(n.contains("innerColor"));
+        CHECK(n.contains("cities"));
+        CHECK(!n["cities"].empty());           /* never an empty city list */
+        CHECK(n["outerColor"].size() == 3);
+    }
+
+    /* The map is inside the mod, and declares the mod BY FOLDER NAME. */
+    const Json map = readJsonFile(dir + "/maps/TestMod.json");
+    REQUIRE(map.contains("mapParameters"));
+    REQUIRE(map["mapParameters"].contains("mods"));
+    REQUIRE(map["mapParameters"]["mods"].size() == 1);
+    CHECK_EQ(map["mapParameters"]["mods"][0].get<std::string>(), std::string("TestMod"));
+
+    /* Every starting location names a nation the mod actually defines. */
+    REQUIRE(map.contains("startingLocations"));
+    CHECK(!map["startingLocations"].empty());
+    for (const auto& sl : map["startingLocations"]) {
+        const std::string want = sl.value("nation", std::string());
+        bool defined = false;
+        for (const auto& n : nations) {
+            if (n.value("name", std::string()) == want) { defined = true; break; }
+        }
+        CHECK(defined);
+    }
+}
+
 int main() {
     testTheGridIsUncivsGrid();
     testTheGridIsCentredOnTheOrigin();
@@ -317,5 +662,11 @@ int main() {
     testAnEditInUncivIsKept();
     testAStrippedMapIsRefusedAndSaysWhy();
     testAWrittenMapIsDetectedAsUnciv();
+    testAFortCrossesOnlyWhereUncivWillBuildOne();
+    testADepositCrossesOnlyWhereItsResourceMaySit();
+    testStartingLocationsNameOnlyCivsTheRulesetHas();
+    testAnAddedFortOrDepositComesHomeButARemovalDoesNot();
+    testAnAdditionComesHomeFromATerrainlessMapToo();
+    testTheModCarriesTheNationsAndTheMapDeclaresIt();
     return check::finish("test_unciv");
 }

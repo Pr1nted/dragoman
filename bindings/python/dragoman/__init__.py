@@ -68,8 +68,15 @@ class Format:
     GD5 = 2
     UNCIV = 3
 
+    #: Unciv as an EXTENSION MOD: a directory holding jsons/Nations.json and
+    #: maps/<name>.json. Unciv takes its civilizations from the ruleset, never from
+    #: the map, so plain UNCIV can only seat a nation matching one of the two dozen
+    #: Civ V ships. A mod carries the map's own nations, so all of them cross.
+    UNCIV_MOD = 4
+
     _BY_NAME = {"odmap": ODMAP, "od": ODMAP, "gd5": GD5, "gd": GD5,
-                "unciv": UNCIV, "unknown": UNKNOWN}
+                "unciv": UNCIV, "unciv-mod": UNCIV_MOD,
+                "unciv_mod": UNCIV_MOD, "unknown": UNKNOWN}
 
     @classmethod
     def parse(cls, value: Union[int, str, None]) -> int:

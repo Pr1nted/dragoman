@@ -43,6 +43,12 @@ pub enum Format {
     /// a raster; Unciv has a hexagon per place, so crossing is a RESAMPLING.
     /// Use [`convert_unciv`] to choose the grid.
     Unciv,
+
+    /// Unciv as an EXTENSION MOD: a directory holding jsons/Nations.json and
+    /// maps/<name>.json. Unciv takes its civilizations from the ruleset, never from
+    /// the map, so plain UNCIV can only seat a nation matching one of the two dozen
+    /// Civ V ships. A mod carries the map's own nations, so all of them cross.
+    UncivMod,
 }
 
 impl Format {
@@ -52,6 +58,7 @@ impl Format {
             Format::Odmap => 1,
             Format::Gd5 => 2,
             Format::Unciv => 3,
+            Format::UncivMod => 4,
         }
     }
 
@@ -60,6 +67,7 @@ impl Format {
             1 => Format::Odmap,
             2 => Format::Gd5,
             3 => Format::Unciv,
+            4 => Format::UncivMod,
             _ => Format::Unknown,
         }
     }

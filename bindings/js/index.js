@@ -39,6 +39,12 @@ const Format = Object.freeze({
    * convertUnciv() to choose the grid.
    */
   UNCIV: 3,
+
+  /* Unciv as an EXTENSION MOD: a directory holding jsons/Nations.json and
+   * maps/<name>.json. Unciv takes its civilizations from the ruleset, never from
+   * the map, so plain UNCIV can only seat a nation matching one of the two dozen
+   * Civ V ships. A mod carries the map's own nations, so all of them cross. */
+  UNCIV_MOD: 4,
 });
 
 /** How much a note matters. */
@@ -222,9 +228,10 @@ function collect(raw) {
  */
 function convert(input, output, to, options) {
   const l = load();
-  if (to !== Format.ODMAP && to !== Format.GD5 && to !== Format.UNCIV) {
+  if (to !== Format.ODMAP && to !== Format.GD5 && to !== Format.UNCIV &&
+      to !== Format.UNCIV_MOD) {
     throw new Error(
-      'a target format is required (Format.ODMAP, Format.GD5 or Format.UNCIV)');
+      'a target format is required (Format.ODMAP, Format.GD5, Format.UNCIV or Format.UNCIV_MOD)');
   }
   const out = [null];
   // ZERO IS SUCCESS. It is the C convention, and reading it the other way makes

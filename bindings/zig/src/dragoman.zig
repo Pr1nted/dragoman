@@ -34,11 +34,18 @@ pub const Format = enum(c_int) {
     /// Use `convertUnciv` to choose the grid.
     unciv = 3,
 
+    /// Unciv as an EXTENSION MOD: a directory holding jsons/Nations.json and
+    /// maps/<name>.json. Unciv takes its civilizations from the ruleset, never from
+    /// the map, so plain UNCIV can only seat a nation matching one of the two dozen
+    /// Civ V ships. A mod carries the map's own nations, so all of them cross.
+    unciv_mod = 4,
+
     pub fn fromCode(code: c_int) Format {
         return switch (code) {
             1 => .odmap,
             2 => .gd5,
             3 => .unciv,
+            4 => .unciv_mod,
             else => .unknown,
         };
     }

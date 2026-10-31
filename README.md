@@ -196,6 +196,23 @@ Unciv is a third destination, and a different kind of one: it has a hexagon per
 place where the other two paint provinces onto a raster, so crossing is a
 resampling rather than a field mapping. Converting **to** Unciv works and
 produces a playable map; reading one back is refused rather than guessed at.
+
+There are two ways to write one:
+
+```
+dragoman convert world.odmap out.json --to unciv       # a map
+dragoman convert world.odmap MyMod   --to unciv-mod    # a map and its nations
+```
+
+The second writes an Unciv extension mod -- `jsons/Nations.json` plus
+`maps/<name>.json` -- and it exists because Unciv takes its civilizations from
+the ruleset and never from the map. Without a mod a country can only reach
+Unciv by matching one of the two dozen Civ V ships, which on a world map is
+about a dozen of two hundred. With one, every nation crosses under its own
+name and colour, with its provinces as city names, and every nation can hold
+a starting location. Drop the folder in Unciv's `mods` directory; the map
+inside it is then offered with its own countries.
+
 See [docs/unciv.md](docs/unciv.md).
 
 ## Versioning
