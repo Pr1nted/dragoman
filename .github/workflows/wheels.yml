@@ -86,6 +86,12 @@ jobs:
           # 11.0, and delocate refuses the mismatch -- which is exactly how the
           # 0.2.1 macOS wheel failed.
           MACOSX_DEPLOYMENT_TARGET: "11.0"
+          # x86_64 only on Linux. The i686 manylinux2014 container cannot
+          # resolve pypi.org on the current runners ("Name or service not
+          # known" while pip fetches scikit-build-core), which failed the
+          # 0.5.3 tag twice and held back the publish job. A 32-bit x86
+          # Linux wheel has no known user; the sdist still builds there.
+          CIBW_ARCHS_LINUX: "x86_64"
 
       - uses: actions/upload-artifact@v4
         with:
