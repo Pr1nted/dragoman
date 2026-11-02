@@ -4,6 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [semver](https://semver.org/), with a separate ABI version — see
 [docs/versioning.md](docs/versioning.md).
 
+## 0.5.4 — 2026-11-02
+
+No change to the library. The release that reaches PyPI: 0.5.3's Linux wheel
+job failed because the 32-bit (i686) build container could not resolve
+pypi.org, so its publish was skipped. Linux wheels are now x86_64 only; 32-bit
+Linux installs from the sdist.
+
 ## 0.5.3 — 2026-11-02
 
 No change to what crosses or how. A version for Open Doctrines 1.3.3b to pin,

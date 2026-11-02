@@ -1,6 +1,6 @@
 .{
     .name = .dragoman,
-    .version = "0.5.3",
+    .version = "0.5.4",
     .minimum_zig_version = "0.15.0",
     .fingerprint = 0x57686e173bb6943c,
     .paths = .{

@@ -53,8 +53,8 @@ extern "C" {
  * without having to parse a version string. */
 #define DRAGOMAN_VERSION_MAJOR 0
 #define DRAGOMAN_VERSION_MINOR 5
-#define DRAGOMAN_VERSION_PATCH 3
-#define DRAGOMAN_VERSION_STRING "0.5.3"
+#define DRAGOMAN_VERSION_PATCH 4
+#define DRAGOMAN_VERSION_STRING "0.5.4"
 #define DRAGOMAN_ABI_VERSION 2
 
 DG_API const char* dg_version_string(void);
