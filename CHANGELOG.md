@@ -4,7 +4,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [semver](https://semver.org/), with a separate ABI version — see
 [docs/versioning.md](docs/versioning.md).
 
-## Unreleased
+## 0.5.3 — 2026-11-02
+
+No change to what crosses or how. A version for Open Doctrines 1.3.3b to pin,
+so the game names the Dragoman it was built and tested against.
+
+## 0.5.1 — 2026-10-01
+
+0.5.1 and 0.5.2 (the same day) also brought the Unciv grid centred on the
+origin, and every binding able to name Unciv.
 
 ### Fixed
 
