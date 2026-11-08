@@ -106,11 +106,12 @@ static void testGd5EventsBecomeScripts() {
     const std::string& text = scripts[0].text;
     CHECK(scripts[0].entrypoint);
     /* The header is what makes Open Doctrines run a file at all; without it
-     * the script is a library that never executes. Version 2 since 0.4.1: the
-     * generated body is still version 1 syntax, which version 2 accepts, but
-     * declaring 1 pins a script the block editor may reopen to a dialect the
-     * game is moving away from. */
-    CHECK(startsWith(text, "#OD/MapEngine/2"));
+     * the script is a library that never executes. We declare the latest known
+     * engine version: the generated body is still version 1 syntax, which every
+     * version through the latest accepts, but declaring an old version pins a
+     * script the block editor may reopen to a dialect the game is moving away
+     * from. */
+    CHECK(startsWith(text, "#OD/MapEngine/5"));
     CHECK(text.find("waitUntil map.turn >= 24") != std::string::npos);
     CHECK(text.find("set country.GER.at_war_with RUS true") != std::string::npos);
 }
@@ -322,7 +323,7 @@ static void testGeneratedScriptsDeclareVersion2() {
     std::vector<ScriptSource> scripts;
     eventsToScripts(events, scripts, report);
     REQUIRE(scripts.size() == 1);
-    CHECK(scripts[0].text.rfind("#OD/MapEngine/2", 0) == 0);
+    CHECK(scripts[0].text.rfind("#OD/MapEngine/5", 0) == 0);
 }
 
 int main() {

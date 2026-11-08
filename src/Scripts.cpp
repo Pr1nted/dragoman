@@ -596,11 +596,13 @@ void eventsFromGd5(const Json& raw, const std::string& owner, std::vector<Event>
 
 std::string eventToOdScript(const Event& e, Report& report) {
     /* The engine version a generated script declares. Only version 1 syntax is
- * written -- `waitUntil` and `set ref value`, which version 2 still accepts --
- * but declaring 1 asks the game to run it under a dialect the game is moving
- * away from, and a script the block editor may reopen should not be pinned to
- * the old one. */
-    std::string out = "#OD/MapEngine/2\n";
+ * written -- `waitUntil` and `set ref value` -- which every engine version
+ * through the current one still accepts. We declare the latest known engine
+ * version rather than the oldest that would run: declaring an old one asks the
+ * game to run the script under a dialect it is moving away from, and a script
+ * the block editor may reopen should not be pinned to that. Keep this in step
+ * with Open Doctrines' ScriptEngine::ENGINE_VERSION. */
+    std::string out = "#OD/MapEngine/5\n";
     out += "# " + e.name + "\n";
     out += "# Translated from a Greater Diplomacy 5 scripted event owned by " + e.owner + ".\n";
 
