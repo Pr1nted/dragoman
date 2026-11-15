@@ -4,22 +4,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [semver](https://semver.org/), with a separate ABI version — see
 [docs/versioning.md](docs/versioning.md).
 
-## 0.5.4 — 2026-11-02
+## 0.5.5 — 2026-11-15
 
-No change to the library. The release that reaches PyPI: 0.5.3's Linux wheel
-job failed because the 32-bit (i686) build container could not resolve
-pypi.org, so its publish was skipped. Linux wheels are now x86_64 only; 32-bit
-Linux installs from the sdist.
+### Fixed
 
-## 0.5.3 — 2026-11-02
-
-No change to what crosses or how. A version for Open Doctrines 1.3.3b to pin,
-so the game names the Dragoman it was built and tested against.
-
-## 0.5.1 — 2026-10-01
-
-0.5.1 and 0.5.2 (the same day) also brought the Unciv grid centred on the
-origin, and every binding able to name Unciv.
+- **A generated script declared an engine version the shipped game refuses.**
+  `eventToOdScript` wrote `#OD/MapEngine/5`, following a rule of declaring the
+  latest known version. That is backwards for a translator: Open Doctrines
+  refuses a header above its own `ENGINE_VERSION`, so a high number does not
+  ask for a newer dialect, it narrows the set of builds that will load the
+  script at all. Every GD5 event converted for the shipped 1.3.3b, which runs
+  1-4, produced a script that failed to load. The body is version 1 syntax, so
+  the header is now 1 -- exact, and good on every Open Doctrines there has
+  ever been.
 
 ### Added
 
@@ -66,6 +63,22 @@ origin, and every binding able to name Unciv.
   about either before: a tile carrying a resource named `Unobtanium` loaded,
   survived `setTransients` twice and started a game.
 
+## 0.5.4 — 2026-11-02
+
+No change to the library. The release that reaches PyPI: 0.5.3's Linux wheel
+job failed because the 32-bit (i686) build container could not resolve
+pypi.org, so its publish was skipped. Linux wheels are now x86_64 only; 32-bit
+Linux installs from the sdist.
+
+## 0.5.3 — 2026-11-02
+
+No change to what crosses or how. A version for Open Doctrines 1.3.3b to pin,
+so the game names the Dragoman it was built and tested against.
+
+## 0.5.1 — 2026-10-01
+
+0.5.1 and 0.5.2 (the same day) also brought the Unciv grid centred on the
+origin, and every binding able to name Unciv.
 
 ### Fixed
 
