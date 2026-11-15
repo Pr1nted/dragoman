@@ -111,7 +111,7 @@ static void testGd5EventsBecomeScripts() {
      * version through the latest accepts, but declaring an old version pins a
      * script the block editor may reopen to a dialect the game is moving away
      * from. */
-    CHECK(startsWith(text, "#OD/MapEngine/5"));
+    CHECK(startsWith(text, "#OD/MapEngine/1"));
     CHECK(text.find("waitUntil map.turn >= 24") != std::string::npos);
     CHECK(text.find("set country.GER.at_war_with RUS true") != std::string::npos);
 }
@@ -323,7 +323,7 @@ static void testGeneratedScriptsDeclareVersion2() {
     std::vector<ScriptSource> scripts;
     eventsToScripts(events, scripts, report);
     REQUIRE(scripts.size() == 1);
-    CHECK(scripts[0].text.rfind("#OD/MapEngine/5", 0) == 0);
+    CHECK(scripts[0].text.rfind("#OD/MapEngine/1", 0) == 0);
 }
 
 int main() {

@@ -595,14 +595,20 @@ void eventsFromGd5(const Json& raw, const std::string& owner, std::vector<Event>
 /* ------------------------------------- events -> Open Doctrines script text */
 
 std::string eventToOdScript(const Event& e, Report& report) {
-    /* The engine version a generated script declares. Only version 1 syntax is
- * written -- `waitUntil` and `set ref value` -- which every engine version
- * through the current one still accepts. We declare the latest known engine
- * version rather than the oldest that would run: declaring an old one asks the
- * game to run the script under a dialect it is moving away from, and a script
- * the block editor may reopen should not be pinned to that. Keep this in step
- * with Open Doctrines' ScriptEngine::ENGINE_VERSION. */
-    std::string out = "#OD/MapEngine/5\n";
+    /* The engine version a generated script declares: the LOWEST that runs the
+     * body, which is 1. Only version 1 syntax is written -- `waitUntil` and
+     * `set ref value` -- so 1 is not merely accepted, it is exact.
+     *
+     * Declaring the latest version instead is what this used to do, and it is
+     * backwards for a translator. Open Doctrines refuses a script whose header
+     * is above its own ENGINE_VERSION (`ver > ENGINE_VERSION` in
+     * ScriptEngine.cpp), so a high number does not ask for a newer dialect --
+     * it narrows the set of builds that will load the script at all. Declaring
+     * 5 made every converted event fail on the shipped 1.3.3b, which runs 1-4.
+     *
+     * 1 loads on every Open Doctrines that has ever existed, and needs no
+     * updating when the engine moves. */
+    std::string out = "#OD/MapEngine/1\n";
     out += "# " + e.name + "\n";
     out += "# Translated from a Greater Diplomacy 5 scripted event owned by " + e.owner + ".\n";
 
