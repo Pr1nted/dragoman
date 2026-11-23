@@ -11,13 +11,23 @@ project(dragoman VERSION ${DRAGOMAN_VERSION_RAW} LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_STANDARD 99)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(DRAGOMAN_BUILD_TESTS "Build the test suite" ON)
 option(DRAGOMAN_BUILD_CLI "Build the dragoman command line tool" ON)
 option(DRAGOMAN_BUILD_SHARED "Build a shared library as well as a static one" ON)
 option(DRAGOMAN_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(DRAGOMAN_PYTHON_WHEEL "Install only the shared library, into the Python package" OFF)
+
+# Position-independent code is needed only by the shared library (and the
+# Python wheel built from it). Forcing it on the STATIC library too breaks a
+# consumer that links it into a non-PIC executable: the PS Vita's loader has no
+# GOT, and vita-elf-create rejects the R_ARM_BASE_PREL a PIC object emits with
+# "Invalid relocation type 25". So tie it to the shared build, which is the only
+# thing that needs it; a static-only consumer (OD_DRAGOMAN_REF with
+# DRAGOMAN_BUILD_SHARED OFF) then gets position-dependent objects.
+if(DRAGOMAN_BUILD_SHARED)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+endif()
 
 # --------------------------------------------------------------- third party
 #
