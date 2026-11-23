@@ -18,13 +18,38 @@
 #ifndef DRAGOMAN_RASTER_H
 #define DRAGOMAN_RASTER_H
 
+#include <cmath>
 #include <cstdint>
 #include <map>
 #include <set>
 #include <string>
 #include <vector>
 
+#if defined(__DJGPP__)
+#include <math.h>   // djgpp's <cmath> leaves llround/lround only in the global
+                    // namespace, not in std; the C header guarantees them there
+#endif
+
 namespace dragoman {
+
+// Round half away from zero. std::llround / std::lround everywhere they exist
+// (so mainstream output is byte-for-byte unchanged); the global C names on
+// djgpp, which does not hoist them into std. One place, so no call site has to
+// know which spelling its platform has.
+inline long long dgRoundToLL(double x) {
+#if defined(__DJGPP__)
+    return ::llround(x);
+#else
+    return std::llround(x);
+#endif
+}
+inline long dgRoundToL(double x) {
+#if defined(__DJGPP__)
+    return ::lround(x);
+#else
+    return std::lround(x);
+#endif
+}
 
 struct Image {
     int                  width = 0;

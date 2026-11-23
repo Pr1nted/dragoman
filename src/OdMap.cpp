@@ -663,7 +663,7 @@ bool writeOdMap(const std::string& path, const World& world, const Options& opt,
                 const auto oit = isoToId.find(owner);
                 int64_t count = g.value("count", int64_t(0));
                 if (count == 0 && g.contains("health")) {
-                    count = static_cast<int64_t>(std::llround(
+                    count = static_cast<int64_t>(dragoman::dgRoundToLL(
                         g["health"].get<double>() * kMenPerHealth));
                 }
                 list.push_back(Json{{"country_id", oit != isoToId.end() ? oit->second : 0},

@@ -146,7 +146,7 @@ bool resourceCanSitOn(const UncivResource& r, const std::string& base,
  * in the sidecar, so nothing is decided by this. */
 int strategicAmountFor(double surface) {
     if (surface <= 0.0) return 1;
-    const long n = std::lround(std::sqrt(surface));
+    const long n = dragoman::dgRoundToL(std::sqrt(surface));
     if (n < 1) return 1;
     if (n > 9) return 9;
     return static_cast<int>(n);

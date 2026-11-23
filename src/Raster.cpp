@@ -243,8 +243,8 @@ std::map<uint32_t, std::pair<int, int>> computeCenters(
     std::map<uint32_t, std::pair<int, int>> mean;
     for (const auto& kv : acc) {
         if (kv.second.n == 0) continue;
-        mean[kv.first] = {static_cast<int>(std::lround(kv.second.sx / kv.second.n)),
-                          static_cast<int>(std::lround(kv.second.sy / kv.second.n))};
+        mean[kv.first] = {static_cast<int>(dragoman::dgRoundToL(kv.second.sx / kv.second.n)),
+                          static_cast<int>(dragoman::dgRoundToL(kv.second.sy / kv.second.n))};
     }
 
     /* Which of those means actually landed on their own province. The ones
@@ -382,7 +382,7 @@ Image resizeImage(const Image& src, int w, int h) {
                 const double top = a + (b - a) * wx;
                 const double bottom = c + (d - c) * wx;
                 out.rgba[(static_cast<size_t>(y) * w + x) * 4 + ch] =
-                    static_cast<uint8_t>(std::lround(top + (bottom - top) * wy));
+                    static_cast<uint8_t>(dragoman::dgRoundToL(top + (bottom - top) * wy));
             }
         }
     }
@@ -390,8 +390,8 @@ Image resizeImage(const Image& src, int w, int h) {
 }
 
 void lonLatToPixel(double lon, double lat, int w, int h, int& x, int& y) {
-    x = static_cast<int>(std::lround((lon + 180.0) / 360.0 * w));
-    y = static_cast<int>(std::lround((90.0 - lat) / 180.0 * h));
+    x = static_cast<int>(dragoman::dgRoundToL((lon + 180.0) / 360.0 * w));
+    y = static_cast<int>(dragoman::dgRoundToL((90.0 - lat) / 180.0 * h));
     if (x < 0) x = 0;
     if (x >= w) x = w - 1;
     if (y < 0) y = 0;

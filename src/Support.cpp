@@ -214,7 +214,17 @@ std::vector<uint8_t> base64Decode(const std::string& text) {
     return out;
 }
 
+// Per-thread on a real OS, so two conversions on two threads keep their own
+// last error. The embedded single-threaded targets (DOS/djgpp, Vita, 3DS, Wii,
+// RISC OS) either cannot emit usable TLS (the Vita's elf-create rejects the
+// relocation; the 3DS has no __tls_get_addr) or have no threads at all, so a
+// plain static is both sufficient and the only thing that links there.
+#if defined(__DJGPP__) || defined(__vita__) || defined(__3DS__) || \
+    defined(__wii__) || defined(__riscos)
+static std::string g_lastError;
+#else
 static thread_local std::string g_lastError;
+#endif
 
 void setLastError(const std::string& message) { g_lastError = message; }
 const char* lastError() { return g_lastError.c_str(); }

@@ -700,7 +700,7 @@ bool readGd5Map(const std::string& dir, const Options& opt, World& world, Report
                     const double health = u.value("health", 0.0);
                     garrison.push_back(Json{
                         {"owner", uit != nameToKey.end() ? uit->second : owner},
-                        {"count", static_cast<int64_t>(std::llround(health * kMenPerHealth))},
+                        {"count", static_cast<int64_t>(dragoman::dgRoundToLL(health * kMenPerHealth))},
                         {"health", health},
                         {"naval", u.value("naval_unit", false)},
                         {"gd5", u}});
@@ -1021,7 +1021,7 @@ bool writeGd5Map(const std::string& dir, const World& world, const Options& opt,
                     {"type", unitType},
                     {"owner", heldName},
                     {"health", health},
-                    {"max_health", static_cast<int64_t>(std::llround(health))},
+                    {"max_health", static_cast<int64_t>(dragoman::dgRoundToLL(health))},
                     {"speed", 1},
                     {"attack", 100},
                     {"defense", 0},
